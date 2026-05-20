@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { Container, PlacedItem } from '../types';
 
 const EV_TRUCK_GLB_URL = '/models/ev-truck.glb';
+const USE_GLB_TRUCK = false;
 
 // Opción A: Modelo Proxy Ligero (Optimizado para web)
 
@@ -21,6 +22,50 @@ interface Container3DProps {
   showWeightHeatmap?: boolean;
   cameraView?: 'iso' | 'front';
 }
+
+const TruckHtmlFallback: React.FC<{ container: Container; placedItems: PlacedItem[] }> = ({ container, placedItems }) => {
+  if (container.type !== 'truck') return null;
+
+  const visibleItems = placedItems.slice(0, 42);
+
+  return (
+    <div className="absolute inset-0 z-[1] pointer-events-none flex items-center justify-center overflow-hidden">
+      <div className="relative w-[72%] max-w-[760px] min-w-[320px] aspect-[2.35/1] -rotate-2">
+        <div className="absolute left-[3%] top-[23%] w-[25%] h-[50%] rounded-[22px] bg-gradient-to-br from-emerald-500 via-emerald-700 to-slate-950 shadow-2xl border border-white/40">
+          <div className="absolute left-[16%] top-[13%] w-[62%] h-[26%] rounded-t-2xl rounded-b-md bg-slate-950/70 border border-white/25" />
+          <div className="absolute left-[12%] bottom-[13%] w-[72%] h-[9%] rounded-full bg-slate-950/70" />
+          <div className="absolute right-[-8%] top-[36%] w-[12%] h-[30%] rounded-r-xl bg-emerald-900" />
+        </div>
+        <div className="absolute right-[3%] top-[12%] w-[70%] h-[63%] rounded-lg border-2 border-emerald-500/80 bg-emerald-100/15 shadow-2xl backdrop-blur-[1px]">
+          <div className="absolute inset-x-0 top-0 h-[13%] bg-white/25 border-b border-emerald-500/60" />
+          <div className="absolute inset-x-[3%] bottom-[8%] grid grid-cols-7 gap-1.5">
+            {visibleItems.map((item, index) => (
+              <div
+                key={`${item.id}-${index}`}
+                className="aspect-square border border-black/30 shadow-sm"
+                style={{ backgroundColor: item.color, opacity: 0.92 }}
+              />
+            ))}
+          </div>
+          <div className="absolute inset-y-[8%] left-[18%] w-px bg-emerald-800/35" />
+          <div className="absolute inset-y-[8%] left-[38%] w-px bg-emerald-800/35" />
+          <div className="absolute inset-y-[8%] left-[58%] w-px bg-emerald-800/35" />
+          <div className="absolute inset-y-[8%] left-[78%] w-px bg-emerald-800/35" />
+        </div>
+        <div className="absolute left-[2%] right-[3%] bottom-[15%] h-[9%] rounded bg-slate-950 shadow-xl" />
+        {[12, 24, 43, 55, 78, 90].map((left, index) => (
+          <div key={index} className="absolute bottom-[5%] w-[8%] aspect-square rounded-full bg-black shadow-xl border-[6px] border-slate-800">
+            <div className="absolute inset-[28%] rounded-full bg-slate-300" />
+            <div className="absolute inset-[42%] rounded-full bg-slate-700" />
+          </div>
+        )).map((wheel, index) => React.cloneElement(wheel, { style: { left: `${[12, 24, 43, 55, 78, 90][index]}%` } }))}
+        <div className="absolute left-[8%] top-[7%] text-[10px] font-black uppercase tracking-[0.24em] text-emerald-950/70">
+          EcoTransport EV
+        </div>
+      </div>
+    </div>
+  );
+};
 
 class GlbErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -160,10 +205,44 @@ const EvTruckGlbModel: React.FC<{ container: Container }> = ({ container }) => {
   );
 };
 
+const GlbTruckPlaceholder: React.FC<{ container: Container }> = ({ container }) => {
+  const w = container.width / 100;
+  const h = (container.height || 240) / 100;
+  const l = container.length / 100;
+  const cabZ = l / 2 + 1.25;
+
+  return (
+    <group>
+      <mesh position={[0, -0.18, 0]} castShadow receiveShadow>
+        <boxGeometry args={[w + 0.22, 0.18, l + 0.24]} />
+        <meshStandardMaterial color="#12372f" metalness={0.35} roughness={0.4} />
+      </mesh>
+      <mesh position={[0, h / 2, 0]}>
+        <boxGeometry args={[w, h, l]} />
+        <meshStandardMaterial color="#16a34a" transparent opacity={0.11} side={THREE.DoubleSide} />
+        <Edges color="#047857" />
+      </mesh>
+      <RoundedBox args={[w * 0.92, 1.35, 1.75]} radius={0.18} smoothness={8} position={[0, 0.48, cabZ]} castShadow receiveShadow>
+        <meshStandardMaterial color="#0f8f5f" metalness={0.45} roughness={0.32} />
+      </RoundedBox>
+      <RoundedBox args={[w * 0.72, 0.52, 0.08]} radius={0.04} smoothness={6} position={[0, 0.9, cabZ + 0.9]} castShadow>
+        <meshStandardMaterial color="#0f172a" metalness={0.15} roughness={0.18} transparent opacity={0.7} />
+      </RoundedBox>
+      {[-w / 2 - 0.18, w / 2 + 0.18].map((x, sideIndex) =>
+        [cabZ + 0.45, l / 2 - 0.3, -l / 2 + 0.45].map((z) => (
+          <Wheel key={`${sideIndex}-${z}`} position={[x, -0.34, z]} side={sideIndex === 0 ? -1 : 1} dual={z < l / 2} />
+        ))
+      )}
+    </group>
+  );
+};
+
 const TruckModelWithGlb: React.FC<{ container: Container }> = ({ container }) => {
+  if (!USE_GLB_TRUCK) return <GlbTruckPlaceholder container={container} />;
+
   return (
     <GlbErrorBoundary>
-      <Suspense fallback={null}>
+      <Suspense fallback={<GlbTruckPlaceholder container={container} />}>
         <EvTruckGlbModel container={container} />
       </Suspense>
     </GlbErrorBoundary>
@@ -937,39 +1016,40 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
   return (
     <div className="w-full h-full bg-[#bebebe]">
       <Canvas shadows gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}>
+        <PerspectiveCamera makeDefault position={cameraPosition} fov={40} />
+        <OrbitControls 
+          makeDefault 
+          maxPolarAngle={Math.PI / 2 - 0.05}
+          minDistance={2}
+          maxDistance={50}
+        />
         <Suspense fallback={null}>
-          <PerspectiveCamera makeDefault position={cameraPosition} fov={40} />
-          <OrbitControls 
-            makeDefault 
-            maxPolarAngle={Math.PI / 2 - 0.05}
-            minDistance={2}
-            maxDistance={50}
-          />
           <Environment preset="city" />
-          <ambientLight intensity={0.7} />
-          <spotLight position={[10, 15, 10]} angle={0.25} penumbra={1} castShadow intensity={2} />
-          <directionalLight position={[-10, 10, -5]} intensity={0.5} />
-          
-          <group>
-            <ContainerModel container={container} />
-            {placedItems.map((item, idx) => (
-              <CargoBox key={`${item.id}-${idx}`} item={item} container={container} />
-            ))}
-            {showWeightHeatmap && <CenterOfGravity items={placedItems} container={container} />}
-          </group>
-
-          <ContactShadows opacity={0.3} scale={40} blur={2} far={10} resolution={512} color="#000000" />
-          <Grid 
-            infiniteGrid 
-            cellSize={1} 
-            sectionSize={5} 
-            fadeDistance={50} 
-            sectionColor="#999999" 
-            cellColor="#bbbbbb" 
-            position={[0, -0.05, 0]} 
-          />
         </Suspense>
+        <ambientLight intensity={0.7} />
+        <spotLight position={[10, 15, 10]} angle={0.25} penumbra={1} castShadow intensity={2} />
+        <directionalLight position={[-10, 10, -5]} intensity={0.5} />
+        
+        <group>
+          <ContainerModel container={container} />
+          {placedItems.map((item, idx) => (
+            <CargoBox key={`${item.id}-${idx}`} item={item} container={container} />
+          ))}
+          {showWeightHeatmap && <CenterOfGravity items={placedItems} container={container} />}
+        </group>
+
+        <ContactShadows opacity={0.3} scale={40} blur={2} far={10} resolution={512} color="#000000" />
+        <Grid 
+          infiniteGrid 
+          cellSize={1} 
+          sectionSize={5} 
+          fadeDistance={50} 
+          sectionColor="#999999" 
+          cellColor="#bbbbbb" 
+          position={[0, -0.05, 0]} 
+        />
       </Canvas>
+      <TruckHtmlFallback container={container} placedItems={placedItems} />
       <Loader />
       
       {placedItems.length === 0 && (
