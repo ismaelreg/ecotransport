@@ -1,0 +1,5 @@
+{
+  "name": "EcoTransport",
+  "description": "A sustainable 3D cargo load planning simulator focused on optimal cubing, fewer shipments, fossil fuel reduction, CO2 impact and AI-powered logistics recommendations.",
+  "requestFramePermissions": []
+}
