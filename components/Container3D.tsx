@@ -23,11 +23,42 @@ interface Container3DProps {
   cameraView?: 'iso' | 'front';
 }
 
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const shadeHex = (hex: string, amount: number) => {
+  const normalized = hex.replace('#', '');
+  if (normalized.length !== 6) return hex;
+  const parts = [0, 2, 4].map((start) => {
+    const channel = Number.parseInt(normalized.slice(start, start + 2), 16);
+    return clamp(channel + amount, 0, 255).toString(16).padStart(2, '0');
+  });
+  return `#${parts.join('')}`;
+};
+
 const TruckImageFallback: React.FC<{ container: Container; placedItems: PlacedItem[] }> = ({ container, placedItems }) => {
   if (container.type !== 'truck') return null;
 
-  const visibleItems = placedItems.slice(0, 80);
-  const columns = 10;
+  const visibleItems = useMemo(() => {
+    return placedItems
+      .slice(0, 120)
+      .map((item, index) => {
+        const xRatio = clamp(item.position[0] / container.width, 0, 1);
+        const yRatio = clamp(item.position[1] / container.height, 0, 1);
+        const zRatio = clamp(item.position[2] / container.length, 0, 1);
+        const depth = clamp((item.width / container.width) * 18, 7, 16);
+        return {
+          item,
+          index,
+          left: 2 + zRatio * 82 + xRatio * 5,
+          bottom: 6 + yRatio * 76 - xRatio * 9,
+          width: clamp((item.length / container.length) * 86, 4.8, 14),
+          height: clamp((item.height / container.height) * 82, 7, 22),
+          depth,
+          zIndex: Math.round(1000 + zRatio * 100 + yRatio * 300 - xRatio * 120),
+        };
+      })
+      .sort((a, b) => a.zIndex - b.zIndex || a.index - b.index);
+  }, [container, placedItems]);
 
   return (
     <div className="absolute inset-0 z-0 overflow-hidden bg-[#c9c9c9]">
@@ -37,21 +68,56 @@ const TruckImageFallback: React.FC<{ container: Container; placedItems: PlacedIt
         className="absolute left-1/2 top-1/2 w-[118%] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain opacity-95"
         draggable={false}
       />
-      <div className="absolute left-[46%] top-[32%] w-[44%] h-[27%] -skew-y-[2deg] opacity-90">
-        <div className="grid h-full grid-cols-10 gap-[3px] p-1">
-          {visibleItems.map((item, index) => (
+      <div className="absolute left-[46%] top-[23%] h-[43%] w-[44%] border border-emerald-500/45 bg-emerald-100/5 shadow-[inset_0_0_24px_rgba(16,185,129,0.14)]" />
+      <div
+        className="absolute left-[46%] top-[25%] h-[39%] w-[43%]"
+        style={{ perspective: '900px', transform: 'skewY(-2deg)' }}
+      >
+        {visibleItems.map(({ item, left, bottom, width, height, depth, zIndex }, index) => {
+          const topColor = shadeHex(item.color, 28);
+          const sideColor = shadeHex(item.color, -34);
+          return (
             <div
               key={`${item.id}-${index}`}
-              className="border border-black/30 shadow-sm"
+              className="absolute"
               style={{
-                backgroundColor: item.color,
-                gridColumn: `span ${index % columns === columns - 1 ? 1 : 1}`,
+                left: `${left}%`,
+                bottom: `${bottom}%`,
+                width: `${width}%`,
+                height: `${height}%`,
+                zIndex,
+                transformStyle: 'preserve-3d',
               }}
-            />
-          ))}
-        </div>
+            >
+              <div
+                className="absolute inset-0 border border-black/35 shadow-[0_6px_10px_rgba(0,0,0,0.18)]"
+                style={{ backgroundColor: item.color }}
+              />
+              <div
+                className="absolute left-0 w-full border border-black/25"
+                style={{
+                  bottom: '100%',
+                  height: `${depth}px`,
+                  backgroundColor: topColor,
+                  transform: `skewX(-45deg) translateX(${depth / 2}px)`,
+                  transformOrigin: 'bottom left',
+                }}
+              />
+              <div
+                className="absolute top-0 border border-black/25"
+                style={{
+                  left: '100%',
+                  width: `${depth}px`,
+                  height: '100%',
+                  backgroundColor: sideColor,
+                  transform: `skewY(-45deg) translateY(-${depth / 2}px)`,
+                  transformOrigin: 'top left',
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
-      <div className="absolute left-[47%] top-[24%] h-[42%] w-[43%] border border-emerald-500/45 bg-emerald-100/5" />
     </div>
   );
 };
