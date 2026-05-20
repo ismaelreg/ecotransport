@@ -28,6 +28,7 @@ VITE_SUPABASE_ANON_KEY=tu_anon_key_publica
 ## Supabase
 
 El cliente Supabase esta en `services/supabaseClient.ts`.
+La app sincroniza el estado del simulador por usuario en `public.app_state` y conserva el resto de tablas como base normalizada para cargas, items, rutas y espacios.
 
 Para crear la base inicial:
 

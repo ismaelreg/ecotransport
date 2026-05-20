@@ -63,11 +63,23 @@ create table if not exists public.cargo_routes (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.app_state (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  items jsonb not null default '[]'::jsonb,
+  container_list jsonb not null default '[]'::jsonb,
+  cargas_history jsonb not null default '[]'::jsonb,
+  route jsonb not null default '{}'::jsonb,
+  selected_container_id text,
+  setup_done boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.profiles enable row level security;
 alter table public.cargo_spaces enable row level security;
 alter table public.cargo_items enable row level security;
 alter table public.cargo_loads enable row level security;
 alter table public.cargo_routes enable row level security;
+alter table public.app_state enable row level security;
 
 create policy "profiles_select_own" on public.profiles
   for select using (auth.uid() = id);
@@ -88,4 +100,7 @@ create policy "cargo_loads_all_own" on public.cargo_loads
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "cargo_routes_all_own" on public.cargo_routes
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "app_state_all_own" on public.app_state
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

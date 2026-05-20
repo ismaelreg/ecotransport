@@ -16,6 +16,7 @@ import { ItemEditor } from './components/ItemEditor';
 import { InitialSetup } from './components/InitialSetup';
 import { RouteSelector } from './components/RouteSelector';
 import { getLoadOptimizationAdvice } from './services/geminiService';
+import { isSupabaseConfigured, supabase } from './services/supabaseClient';
 
 type ViewType = 'simulador' | 'cargas' | 'items' | 'espacio' | 'usuarios' | 'licencias';
 type FloatingPanelKey = 'sustainability' | 'capacity';
@@ -47,6 +48,20 @@ const CURRENT_USER = {
 };
 const AUTH_PASSWORD = '3.1416';
 
+const DEFAULT_ITEMS: CargoItem[] = [
+  { id: 'A', name: 'Item A', length: 120, width: 80, height: 100, weight: 25, quantity: 15, color: '#f87171', stackable: true, tiltable: false },
+  { id: 'B', name: 'Item B', length: 60, width: 40, height: 40, weight: 12, quantity: 40, color: '#fbbf24', stackable: true, tiltable: true }
+];
+
+type RemoteAppState = {
+  items: CargoItem[];
+  container_list: Container[];
+  cargas_history: any[];
+  route: Route;
+  selected_container_id: string | null;
+  setup_done: boolean;
+};
+
 interface MerchandiseTicketProps {
   setShowTicket: (show: boolean) => void;
   reportData: any;
@@ -59,18 +74,22 @@ interface MerchandiseTicketProps {
 }
 
 interface LoginScreenProps {
-  onLogin: (email: string, password: string) => boolean;
+  onLogin: (email: string, password: string) => Promise<boolean>;
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [email, setEmail] = useState(CURRENT_USER.email);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const ok = onLogin(email, password);
-    if (!ok) setError('Usuario o contraseña incorrectos.');
+    setError('');
+    setIsSubmitting(true);
+    const ok = await onLogin(email, password);
+    if (!ok) setError('Usuario o contraseña incorrectos o no registrado en Supabase.');
+    setIsSubmitting(false);
   };
 
   return (
@@ -115,8 +134,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               {error}
             </div>
           )}
-          <button type="submit" className="w-full bg-emerald-700 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-emerald-800 transition-all shadow-lg">
-            Ingresar
+          <button type="submit" disabled={isSubmitting} className="w-full bg-emerald-700 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-emerald-800 transition-all shadow-lg disabled:opacity-60">
+            {isSubmitting ? 'Ingresando...' : 'Ingresar'}
           </button>
           <div className="text-[10px] text-gray-400 leading-relaxed bg-gray-50 rounded-xl p-3 border border-gray-100">
             Acceso de prueba: {CURRENT_USER.email} / {AUTH_PASSWORD}
@@ -410,7 +429,10 @@ const MerchandiseTicket: React.FC<MerchandiseTicketProps> = ({
 );
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('ecotransport_auth') === 'true');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !isSupabaseConfigured && localStorage.getItem('ecotransport_auth') === 'true');
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(isSupabaseConfigured);
+  const [isRemoteStateReady, setIsRemoteStateReady] = useState(!isSupabaseConfigured);
   const [activeView, setActiveView] = useState<ViewType>('simulador');
   const [showSetup, setShowSetup] = useState(() => localStorage.getItem('cargo_setup_done') !== 'true');
   const [showWeightHeatmap, setShowWeightHeatmap] = useState(false);
@@ -473,10 +495,7 @@ const App: React.FC = () => {
 
   const [items, setItems] = useState<CargoItem[]>(() => {
     const saved = localStorage.getItem('cargo_items');
-    return saved ? JSON.parse(saved) : [
-      { id: 'A', name: 'Ítem A', length: 120, width: 80, height: 100, weight: 25, quantity: 15, color: '#f87171', stackable: true, tiltable: false },
-      { id: 'B', name: 'Ítem B', length: 60, width: 40, height: 40, weight: 12, quantity: 40, color: '#fbbf24', stackable: true, tiltable: true }
-    ];
+    return saved ? JSON.parse(saved) : DEFAULT_ITEMS;
   });
 
   const [cargasHistory, setCargasHistory] = useState<any[]>(() => {
@@ -560,16 +579,62 @@ const App: React.FC = () => {
     document.addEventListener('mouseup', onMouseUp);
   }, [floatingPanels]);
 
-  const handleLogin = useCallback((email: string, password: string) => {
-    const valid = email.trim().toLowerCase() === CURRENT_USER.email.toLowerCase() && password === AUTH_PASSWORD;
-    if (valid) {
-      localStorage.setItem('ecotransport_auth', 'true');
-      setIsAuthenticated(true);
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setIsAuthChecking(false);
+      return;
     }
-    return valid;
+
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      const user = data.session?.user;
+      setAuthUserId(user?.id || null);
+      setIsAuthenticated(Boolean(user));
+      setIsAuthChecking(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user;
+      setAuthUserId(user?.id || null);
+      setIsAuthenticated(Boolean(user));
+      setIsRemoteStateReady(!isSupabaseConfigured || !user);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
-  const handleLogout = useCallback(() => {
+  const handleLogin = useCallback(async (email: string, password: string) => {
+    if (!isSupabaseConfigured) {
+      const valid = email.trim().toLowerCase() === CURRENT_USER.email.toLowerCase() && password === AUTH_PASSWORD;
+      if (valid) {
+        localStorage.setItem('ecotransport_auth', 'true');
+        setIsAuthenticated(true);
+      }
+      return valid;
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (error || !data.user) return false;
+    setAuthUserId(data.user.id);
+    setIsAuthenticated(true);
+    return true;
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    if (isSupabaseConfigured) {
+      await supabase.auth.signOut();
+      setAuthUserId(null);
+      setIsRemoteStateReady(false);
+    }
     localStorage.removeItem('ecotransport_auth');
     setIsAuthenticated(false);
   }, []);
@@ -616,11 +681,74 @@ const App: React.FC = () => {
   }, [selectedContainer.maxWeight]);
 
   useEffect(() => {
+    if (!isSupabaseConfigured || !authUserId) return;
+
+    let cancelled = false;
+
+    const loadRemoteState = async () => {
+      setIsRemoteStateReady(false);
+      const { data, error } = await supabase
+        .from('app_state')
+        .select('*')
+        .eq('user_id', authUserId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) {
+        console.warn('No se pudo cargar app_state desde Supabase:', error.message);
+        setIsRemoteStateReady(true);
+        return;
+      }
+
+      if (data) {
+        const remote = data as RemoteAppState;
+        const nextContainers = remote.container_list?.length ? remote.container_list : containerList;
+        setItems(remote.items?.length ? remote.items : DEFAULT_ITEMS);
+        setContainerList(nextContainers);
+        setCargasHistory(remote.cargas_history || []);
+        setRoute(remote.route || { origin: null, destination: null, distanceKm: 0 });
+        setShowSetup(!remote.setup_done);
+
+        const selected = nextContainers.find((container) => container.id === remote.selected_container_id);
+        if (selected) setSelectedContainer(selected);
+      }
+
+      setIsRemoteStateReady(true);
+    };
+
+    loadRemoteState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUserId]);
+
+  useEffect(() => {
     localStorage.setItem('cargo_items', JSON.stringify(items));
     localStorage.setItem('cargo_history', JSON.stringify(cargasHistory));
     localStorage.setItem('cargo_spaces', JSON.stringify(containerList));
     localStorage.setItem('cargo_route', JSON.stringify(route));
-  }, [items, cargasHistory, containerList, route]);
+
+    if (!isSupabaseConfigured || !authUserId || !isRemoteStateReady) return;
+
+    const syncRemoteState = async () => {
+      const { error } = await supabase.from('app_state').upsert({
+        user_id: authUserId,
+        items,
+        container_list: containerList,
+        cargas_history: cargasHistory,
+        route,
+        selected_container_id: selectedContainer.id,
+        setup_done: !showSetup,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (error) console.warn('No se pudo guardar app_state en Supabase:', error.message);
+    };
+
+    syncRemoteState();
+  }, [items, cargasHistory, containerList, route, selectedContainer.id, showSetup, authUserId, isRemoteStateReady]);
 
   // Auto-rellenar dirección en el manifiesto basado en la ruta seleccionada
   useEffect(() => {
@@ -899,6 +1027,17 @@ const App: React.FC = () => {
 
     doc.save(`Reporte_Carga_${Date.now()}.pdf`);
   };
+
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-emerald-950 text-white flex items-center justify-center">
+        <div className="flex items-center gap-3 text-sm font-black uppercase tracking-widest">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Validando sesion
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={handleLogin} />;
