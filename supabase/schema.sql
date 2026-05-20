@@ -81,6 +81,15 @@ alter table public.cargo_loads enable row level security;
 alter table public.cargo_routes enable row level security;
 alter table public.app_state enable row level security;
 
+drop policy if exists "profiles_select_own" on public.profiles;
+drop policy if exists "profiles_update_own" on public.profiles;
+drop policy if exists "profiles_insert_own" on public.profiles;
+drop policy if exists "cargo_spaces_all_own" on public.cargo_spaces;
+drop policy if exists "cargo_items_all_own" on public.cargo_items;
+drop policy if exists "cargo_loads_all_own" on public.cargo_loads;
+drop policy if exists "cargo_routes_all_own" on public.cargo_routes;
+drop policy if exists "app_state_all_own" on public.app_state;
+
 create policy "profiles_select_own" on public.profiles
   for select using (auth.uid() = id);
 

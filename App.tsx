@@ -75,18 +75,34 @@ interface MerchandiseTicketProps {
 
 interface LoginScreenProps {
   onLogin: (email: string, password: string) => Promise<boolean>;
+  onSignup: (name: string, email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignup }) => {
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [name, setName] = useState(CURRENT_USER.name);
   const [email, setEmail] = useState(CURRENT_USER.email);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+    setNotice('');
     setIsSubmitting(true);
+    if (mode === 'signup') {
+      const result = await onSignup(name, email, password);
+      if (result.ok) {
+        setNotice(result.message || 'Cuenta creada. Ya puedes ingresar.');
+        setMode('login');
+      } else {
+        setError(result.message || 'No se pudo crear la cuenta.');
+      }
+      setIsSubmitting(false);
+      return;
+    }
     const ok = await onLogin(email, password);
     if (!ok) setError('Usuario o contraseña incorrectos o no registrado en Supabase.');
     setIsSubmitting(false);
@@ -110,6 +126,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           </p>
         </div>
         <form onSubmit={handleSubmit} className="p-8 space-y-5">
+          {mode === 'signup' && (
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-2">Nombre</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                placeholder="Nombre completo"
+              />
+            </div>
+          )}
           <div>
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-2">Correo</label>
             <input
@@ -134,11 +162,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               {error}
             </div>
           )}
+          {notice && (
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl px-4 py-3 text-xs font-bold">
+              {notice}
+            </div>
+          )}
           <button type="submit" disabled={isSubmitting} className="w-full bg-emerald-700 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-emerald-800 transition-all shadow-lg disabled:opacity-60">
-            {isSubmitting ? 'Ingresando...' : 'Ingresar'}
+            {isSubmitting ? (mode === 'signup' ? 'Creando...' : 'Ingresando...') : (mode === 'signup' ? 'Crear Cuenta' : 'Ingresar')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === 'login' ? 'signup' : 'login');
+              setError('');
+              setNotice('');
+            }}
+            className="w-full text-[11px] font-black uppercase tracking-widest text-emerald-700 hover:text-emerald-900"
+          >
+            {mode === 'login' ? 'Crear usuario nuevo' : 'Ya tengo cuenta'}
           </button>
           <div className="text-[10px] text-gray-400 leading-relaxed bg-gray-50 rounded-xl p-3 border border-gray-100">
-            Acceso de prueba: {CURRENT_USER.email} / {AUTH_PASSWORD}
+            {mode === 'login' ? `Acceso de prueba: ${CURRENT_USER.email} / ${AUTH_PASSWORD}` : 'La cuenta se registrara en Supabase Auth.'}
           </div>
         </form>
       </div>
@@ -629,6 +673,48 @@ const App: React.FC = () => {
     return true;
   }, []);
 
+  const handleSignup = useCallback(async (name: string, email: string, password: string) => {
+    if (!isSupabaseConfigured) {
+      return { ok: false, message: 'Supabase no esta configurado para crear usuarios.' };
+    }
+
+    if (!email.trim() || !password.trim()) {
+      return { ok: false, message: 'Correo y contraseña son obligatorios.' };
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          full_name: name.trim() || email.trim(),
+          company: APP_BADGE,
+        },
+      },
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    if (data.user) {
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        full_name: name.trim() || email.trim(),
+        company: APP_BADGE,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    if (data.session?.user) {
+      setAuthUserId(data.session.user.id);
+      setIsAuthenticated(true);
+      return { ok: true, message: 'Cuenta creada e iniciada correctamente.' };
+    }
+
+    return { ok: true, message: 'Cuenta creada. Revisa tu correo si Supabase solicita confirmacion.' };
+  }, []);
+
   const handleLogout = useCallback(async () => {
     if (isSupabaseConfigured) {
       await supabase.auth.signOut();
@@ -1040,7 +1126,7 @@ const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <LoginScreen onLogin={handleLogin} onSignup={handleSignup} />;
   }
 
   return (
