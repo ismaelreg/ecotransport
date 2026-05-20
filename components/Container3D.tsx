@@ -1,7 +1,7 @@
 
-import React, { useMemo, Suspense } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid, Text, PerspectiveCamera, Edges, Environment, ContactShadows, Loader, RoundedBox, useGLTF } from '@react-three/drei';
+import React, { useEffect, useMemo, Suspense } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { OrbitControls, Grid, Text, PerspectiveCamera, Edges, Loader, RoundedBox, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { Container, PlacedItem } from '../types';
 
@@ -23,48 +23,65 @@ interface Container3DProps {
   cameraView?: 'iso' | 'front';
 }
 
-const TruckHtmlFallback: React.FC<{ container: Container; placedItems: PlacedItem[] }> = ({ container, placedItems }) => {
+const TruckImageFallback: React.FC<{ container: Container; placedItems: PlacedItem[] }> = ({ container, placedItems }) => {
   if (container.type !== 'truck') return null;
 
-  const visibleItems = placedItems.slice(0, 42);
+  const visibleItems = placedItems.slice(0, 80);
+  const columns = 10;
 
   return (
-    <div className="absolute inset-0 z-[1] pointer-events-none flex items-center justify-center overflow-hidden">
-      <div className="relative w-[72%] max-w-[760px] min-w-[320px] aspect-[2.35/1] -rotate-2">
-        <div className="absolute left-[3%] top-[23%] w-[25%] h-[50%] rounded-[22px] bg-gradient-to-br from-emerald-500 via-emerald-700 to-slate-950 shadow-2xl border border-white/40">
-          <div className="absolute left-[16%] top-[13%] w-[62%] h-[26%] rounded-t-2xl rounded-b-md bg-slate-950/70 border border-white/25" />
-          <div className="absolute left-[12%] bottom-[13%] w-[72%] h-[9%] rounded-full bg-slate-950/70" />
-          <div className="absolute right-[-8%] top-[36%] w-[12%] h-[30%] rounded-r-xl bg-emerald-900" />
-        </div>
-        <div className="absolute right-[3%] top-[12%] w-[70%] h-[63%] rounded-lg border-2 border-emerald-500/80 bg-emerald-100/15 shadow-2xl backdrop-blur-[1px]">
-          <div className="absolute inset-x-0 top-0 h-[13%] bg-white/25 border-b border-emerald-500/60" />
-          <div className="absolute inset-x-[3%] bottom-[8%] grid grid-cols-7 gap-1.5">
-            {visibleItems.map((item, index) => (
-              <div
-                key={`${item.id}-${index}`}
-                className="aspect-square border border-black/30 shadow-sm"
-                style={{ backgroundColor: item.color, opacity: 0.92 }}
-              />
-            ))}
-          </div>
-          <div className="absolute inset-y-[8%] left-[18%] w-px bg-emerald-800/35" />
-          <div className="absolute inset-y-[8%] left-[38%] w-px bg-emerald-800/35" />
-          <div className="absolute inset-y-[8%] left-[58%] w-px bg-emerald-800/35" />
-          <div className="absolute inset-y-[8%] left-[78%] w-px bg-emerald-800/35" />
-        </div>
-        <div className="absolute left-[2%] right-[3%] bottom-[15%] h-[9%] rounded bg-slate-950 shadow-xl" />
-        {[12, 24, 43, 55, 78, 90].map((left, index) => (
-          <div key={index} className="absolute bottom-[5%] w-[8%] aspect-square rounded-full bg-black shadow-xl border-[6px] border-slate-800">
-            <div className="absolute inset-[28%] rounded-full bg-slate-300" />
-            <div className="absolute inset-[42%] rounded-full bg-slate-700" />
-          </div>
-        )).map((wheel, index) => React.cloneElement(wheel, { style: { left: `${[12, 24, 43, 55, 78, 90][index]}%` } }))}
-        <div className="absolute left-[8%] top-[7%] text-[10px] font-black uppercase tracking-[0.24em] text-emerald-950/70">
-          EcoTransport EV
+    <div className="absolute inset-0 z-0 overflow-hidden bg-[#c9c9c9]">
+      <img
+        src="/images/ev-truck-reference.png"
+        alt=""
+        className="absolute left-1/2 top-1/2 w-[118%] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain opacity-95"
+        draggable={false}
+      />
+      <div className="absolute left-[46%] top-[32%] w-[44%] h-[27%] -skew-y-[2deg] opacity-90">
+        <div className="grid h-full grid-cols-10 gap-[3px] p-1">
+          {visibleItems.map((item, index) => (
+            <div
+              key={`${item.id}-${index}`}
+              className="border border-black/30 shadow-sm"
+              style={{
+                backgroundColor: item.color,
+                gridColumn: `span ${index % columns === columns - 1 ? 1 : 1}`,
+              }}
+            />
+          ))}
         </div>
       </div>
+      <div className="absolute left-[47%] top-[24%] h-[42%] w-[43%] border border-emerald-500/45 bg-emerald-100/5" />
     </div>
   );
+};
+
+const CanvasAutoSizer: React.FC = () => {
+  const { gl, setSize } = useThree();
+
+  useEffect(() => {
+    const parent = gl.domElement.parentElement;
+    if (!parent) return;
+
+    const syncSize = () => {
+      const { width, height } = parent.getBoundingClientRect();
+      if (width <= 0 || height <= 0) return;
+      gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      setSize(width, height);
+    };
+
+    syncSize();
+    const observer = new ResizeObserver(syncSize);
+    observer.observe(parent);
+    window.addEventListener('resize', syncSize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncSize);
+    };
+  }, [gl, setSize]);
+
+  return null;
 };
 
 class GlbErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
@@ -958,7 +975,7 @@ const ContainerModel: React.FC<{ container: Container }> = ({ container }) => {
 
   return (
     <group>
-      {container.type === 'truck' ? (
+      {container.type === 'truck' && USE_GLB_TRUCK ? (
         <TruckModelWithGlb container={container} />
       ) : (
         <Model container={container} />
@@ -1014,8 +1031,15 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
   const cameraPosition: [number, number, number] = cameraView === 'front' ? [0, 5, 14] : [10, 8, 12];
 
   return (
-    <div className="w-full h-full bg-[#bebebe]">
-      <Canvas shadows gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}>
+    <div className="canvas-container relative w-full h-full bg-[#bebebe]">
+      <TruckImageFallback container={container} placedItems={placedItems} />
+      <Canvas
+        className="canvas-container__surface relative z-10"
+        dpr={[1, 1]}
+        gl={{ antialias: false, alpha: true, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false }}
+        style={{ display: 'block' }}
+      >
+        <CanvasAutoSizer />
         <PerspectiveCamera makeDefault position={cameraPosition} fov={40} />
         <OrbitControls 
           makeDefault 
@@ -1023,9 +1047,6 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
           minDistance={2}
           maxDistance={50}
         />
-        <Suspense fallback={null}>
-          <Environment preset="city" />
-        </Suspense>
         <ambientLight intensity={0.7} />
         <spotLight position={[10, 15, 10]} angle={0.25} penumbra={1} castShadow intensity={2} />
         <directionalLight position={[-10, 10, -5]} intensity={0.5} />
@@ -1038,7 +1059,6 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
           {showWeightHeatmap && <CenterOfGravity items={placedItems} container={container} />}
         </group>
 
-        <ContactShadows opacity={0.3} scale={40} blur={2} far={10} resolution={512} color="#000000" />
         <Grid 
           infiniteGrid 
           cellSize={1} 
@@ -1049,7 +1069,6 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
           position={[0, -0.05, 0]} 
         />
       </Canvas>
-      <TruckHtmlFallback container={container} placedItems={placedItems} />
       <Loader />
       
       {placedItems.length === 0 && (
