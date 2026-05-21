@@ -349,6 +349,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           metalness: 0.05,
           emissive: new THREE.Color(item.color),
           emissiveIntensity: 0.08,
+          depthTest: false,
         })
       );
       box.position.set(xPos, yPos, zPos);
@@ -359,7 +360,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
       const boxEdges = new THREE.LineSegments(
         new THREE.EdgesGeometry(box.geometry),
-        new THREE.LineBasicMaterial({ color: '#111111' })
+        new THREE.LineBasicMaterial({ color: '#111111', depthTest: false })
       );
       boxEdges.position.copy(box.position);
       boxEdges.renderOrder = 4;
@@ -424,34 +425,48 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           });
         });
 
-        model.updateMatrixWorld(true);
-        const initialBox = new THREE.Box3().setFromObject(model);
-        const initialSize = initialBox.getSize(new THREE.Vector3());
-        const longestAxis = Math.max(initialSize.x, initialSize.y, initialSize.z);
-        model.rotation.set(0, 0, 0);
-        if (longestAxis === initialSize.y) model.rotation.x = Math.PI / 2;
-        else if (longestAxis === initialSize.x) model.rotation.y = Math.PI / 2;
-
-        model.updateMatrixWorld(true);
-        const orientedBox = new THREE.Box3().setFromObject(model);
-        const orientedSize = orientedBox.getSize(new THREE.Vector3());
-        if (orientedSize.y > Math.max(orientedSize.x, orientedSize.z) * 1.25) {
-          model.rotation.z = -Math.PI / 2;
-          model.updateMatrixWorld(true);
-        }
-
-        const modelBox = new THREE.Box3().setFromObject(model);
-        const modelSize = modelBox.getSize(new THREE.Vector3());
         const cabAllowance = Math.min(2.8, Math.max(2.0, l * 0.34));
         const targetLength = l + cabAllowance;
-        const targetWidth = w + 0.42;
-        const targetHeight = h + 0.72;
-        const scale = Math.min(
-          targetLength / Math.max(modelSize.z, 0.001),
-          targetWidth / Math.max(modelSize.x, 0.001),
-          targetHeight / Math.max(modelSize.y, 0.001)
+        const targetWidth = w + 1.1;
+        const targetHeight = h + 1;
+
+        const rotationCandidates = [
+          new THREE.Euler(0, 0, 0),
+          new THREE.Euler(0, Math.PI / 2, 0),
+          new THREE.Euler(0, -Math.PI / 2, 0),
+          new THREE.Euler(Math.PI / 2, 0, 0),
+          new THREE.Euler(-Math.PI / 2, 0, 0),
+          new THREE.Euler(0, 0, Math.PI / 2),
+          new THREE.Euler(0, 0, -Math.PI / 2),
+        ];
+
+        let bestRotation = rotationCandidates[0];
+        let bestSize = new THREE.Vector3(1, 1, 1);
+        let bestScore = Number.POSITIVE_INFINITY;
+        rotationCandidates.forEach((rotation) => {
+          model.position.set(0, 0, 0);
+          model.scale.set(1, 1, 1);
+          model.rotation.copy(rotation);
+          model.updateMatrixWorld(true);
+          const candidateSize = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+          const lengthScore = Math.abs((candidateSize.z / Math.max(candidateSize.x, 0.001)) - (targetLength / targetWidth));
+          const widthPenalty = candidateSize.x > candidateSize.z ? 6 : 0;
+          const heightPenalty = candidateSize.y > candidateSize.z * 0.45 ? 4 : 0;
+          const score = lengthScore + widthPenalty + heightPenalty;
+          if (score < bestScore) {
+            bestScore = score;
+            bestRotation = rotation;
+            bestSize = candidateSize;
+          }
+        });
+
+        model.position.set(0, 0, 0);
+        model.rotation.copy(bestRotation);
+        model.scale.set(
+          targetWidth / Math.max(bestSize.x, 0.001),
+          targetHeight / Math.max(bestSize.y, 0.001),
+          targetLength / Math.max(bestSize.z, 0.001)
         );
-        model.scale.setScalar(scale);
         model.updateMatrixWorld(true);
 
         const fittedBox = new THREE.Box3().setFromObject(model);
@@ -462,31 +477,6 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           -fittedBox.min.y - 0.04,
           rearAlignment - fittedBox.max.z
         );
-
-        model.updateMatrixWorld(true);
-        const alignedBox = new THREE.Box3().setFromObject(model);
-        const alignedSize = alignedBox.getSize(new THREE.Vector3());
-        if (alignedSize.x < alignedSize.z * 0.22 || alignedSize.y > alignedSize.z * 0.7) {
-          model.rotation.set(0, Math.PI / 2, 0);
-          model.scale.setScalar(1);
-          model.updateMatrixWorld(true);
-          const retryBox = new THREE.Box3().setFromObject(model);
-          const retrySize = retryBox.getSize(new THREE.Vector3());
-          const retryScale = Math.min(
-            targetLength / Math.max(retrySize.z, 0.001),
-            targetWidth / Math.max(retrySize.x, 0.001),
-            targetHeight / Math.max(retrySize.y, 0.001)
-          );
-          model.scale.setScalar(retryScale);
-          model.updateMatrixWorld(true);
-          const retryFittedBox = new THREE.Box3().setFromObject(model);
-          const retryCenter = retryFittedBox.getCenter(new THREE.Vector3());
-          model.position.set(
-            -retryCenter.x,
-            -retryFittedBox.min.y - 0.04,
-            rearAlignment - retryFittedBox.max.z
-          );
-        }
 
         scene.add(model);
         const modelMeta = {
