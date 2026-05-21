@@ -28,216 +28,141 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 const shadeHex = (hex: string, amount: number) => {
   const normalized = hex.replace('#', '');
   if (normalized.length !== 6) return hex;
-  const parts = [0, 2, 4].map((start) => {
+  return `#${[0, 2, 4].map((start) => {
     const channel = Number.parseInt(normalized.slice(start, start + 2), 16);
     return clamp(channel + amount, 0, 255).toString(16).padStart(2, '0');
-  });
-  return `#${parts.join('')}`;
+  }).join('')}`;
 };
 
-const TruckImageFallback: React.FC<{ container: Container; placedItems: PlacedItem[] }> = ({ container, placedItems }) => {
-  const [rotation, setRotation] = useState({ x: -12, y: -24 });
-  const [dragStart, setDragStart] = useState<{ x: number; y: number; rotationX: number; rotationY: number } | null>(null);
+const CargoPrism: React.FC<{
+  color: string;
+  x: number;
+  y: number;
+  z: number;
+  width: number;
+  height: number;
+  depth: number;
+}> = ({ color, x, y, z, width, height, depth }) => (
+  <div
+    className="absolute"
+    style={{
+      left: x,
+      top: y,
+      width,
+      height,
+      transformStyle: 'preserve-3d',
+      transform: `translateZ(${z}px)`,
+    }}
+  >
+    <div className="absolute inset-0 border border-black/30 shadow-[0_6px_14px_rgba(0,0,0,0.16)]" style={{ backgroundColor: color, transform: `translateZ(${depth / 2}px)` }} />
+    <div className="absolute inset-0 border border-black/15" style={{ backgroundColor: shadeHex(color, -20), transform: `rotateY(180deg) translateZ(${depth / 2}px)` }} />
+    <div
+      className="absolute top-0 border border-black/25"
+      style={{
+        left: width,
+        width: depth,
+        height,
+        backgroundColor: shadeHex(color, -38),
+        transformOrigin: 'left center',
+        transform: 'rotateY(90deg)',
+      }}
+    />
+    <div
+      className="absolute left-0 border border-black/25"
+      style={{
+        top: -depth,
+        width,
+        height: depth,
+        backgroundColor: shadeHex(color, 24),
+        transformOrigin: 'bottom center',
+        transform: 'rotateX(90deg)',
+      }}
+    />
+  </div>
+);
 
-  if (container.type !== 'truck') return null;
+const TruckCss3DView: React.FC<{ container: Container; placedItems: PlacedItem[] }> = ({ container, placedItems }) => {
+  const [rotation, setRotation] = useState({ x: -15, y: -31 });
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; rx: number; ry: number } | null>(null);
+  const trailer = { width: 520, height: 170, depth: 138 };
 
-  const trailer = { width: 560, height: 190, depth: 170 };
-
-  const visibleItems = useMemo(() => {
-    return placedItems
-      .slice(0, 140)
-      .map((item, index) => {
-        const xRatio = clamp(item.position[0] / container.width, 0, 1);
-        const zRatio = clamp(item.position[2] / container.length, 0, 1);
-        const width = clamp((item.length / container.length) * trailer.width, 18, 82);
-        const height = clamp((item.height / container.height) * trailer.height, 16, 64);
-        const depth = clamp((item.width / container.width) * trailer.depth, 22, 82);
-        const left = clamp(zRatio * (trailer.width - width), 0, trailer.width - width);
-        const top = clamp(trailer.height - ((item.position[1] + item.height) / container.height) * trailer.height, 0, trailer.height - height);
-        const z = clamp((xRatio - 0.5) * (trailer.depth - depth), -trailer.depth / 2, trailer.depth / 2);
-        return {
-          item,
-          index,
-          left,
-          top,
-          width,
-          height,
-          depth,
-          z,
-        };
-      })
-      .sort((a, b) => a.z - b.z || a.top - b.top || a.index - b.index);
+  const boxes = useMemo(() => {
+    return placedItems.slice(0, 160).map((item, index) => {
+      const w = clamp((item.length / container.length) * trailer.width, 16, 72);
+      const h = clamp((item.height / container.height) * trailer.height, 14, 58);
+      const d = clamp((item.width / container.width) * trailer.depth, 18, 70);
+      const x = clamp((item.position[2] / container.length) * (trailer.width - w), 0, trailer.width - w);
+      const y = clamp(trailer.height - ((item.position[1] + item.height) / container.height) * trailer.height, 0, trailer.height - h);
+      const z = clamp(((item.position[0] + item.width / 2) / container.width - 0.5) * (trailer.depth - d), -trailer.depth / 2 + d / 2, trailer.depth / 2 - d / 2);
+      return { item, index, x, y, z, width: w, height: h, depth: d };
+    }).sort((a, b) => a.z - b.z || a.y - b.y || a.index - b.index);
   }, [container, placedItems]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDragStart({ x: event.clientX, y: event.clientY, rotationX: rotation.x, rotationY: rotation.y });
+    setDragStart({ x: event.clientX, y: event.clientY, rx: rotation.x, ry: rotation.y });
   };
 
   const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!dragStart) return;
-    const nextY = dragStart.rotationY + (event.clientX - dragStart.x) * 0.35;
-    const nextX = clamp(dragStart.rotationX - (event.clientY - dragStart.y) * 0.24, -42, 10);
-    setRotation({ x: nextX, y: nextY });
+    setRotation({
+      x: clamp(dragStart.rx - (event.clientY - dragStart.y) * 0.18, -38, 4),
+      y: dragStart.ry + (event.clientX - dragStart.x) * 0.24,
+    });
   };
-
-  const stopDrag = () => setDragStart(null);
 
   return (
     <div
-      className="absolute inset-0 z-20 overflow-hidden bg-[radial-gradient(circle_at_40%_20%,#f3f7f4_0%,#c8cfcb_42%,#aeb7b2_100%)] cursor-grab active:cursor-grabbing"
+      className="absolute inset-0 z-20 overflow-hidden bg-[radial-gradient(circle_at_45%_20%,#eef5f1_0%,#cbd4cf_46%,#b5bdb8_100%)] cursor-grab active:cursor-grabbing"
       onPointerDown={startDrag}
       onPointerMove={moveDrag}
-      onPointerUp={stopDrag}
-      onPointerCancel={stopDrag}
-      onDoubleClick={() => setRotation({ x: -12, y: -24 })}
+      onPointerUp={() => setDragStart(null)}
+      onPointerCancel={() => setDragStart(null)}
+      onDoubleClick={() => setRotation({ x: -15, y: -31 })}
     >
-      <div
-        className="absolute left-1/2 top-1/2 h-[460px] w-[820px] -translate-x-1/2 -translate-y-1/2"
-        style={{ perspective: '1200px' }}
-      >
+      <div className="absolute inset-0" style={{ perspective: '1350px' }}>
         <div
           className="absolute left-1/2 top-1/2"
           style={{
             transformStyle: 'preserve-3d',
-            transform: `translate3d(-50%, -45%, 0) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
-            transition: dragStart ? 'none' : 'transform 180ms ease-out',
+            transform: `translate3d(-50%, -48%, 0) scale(0.72) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
+            transition: dragStart ? 'none' : 'transform 160ms ease-out',
           }}
         >
-          <div className="absolute left-[-370px] top-[18px] h-[132px] w-[168px] rounded-[48px_28px_20px_24px] bg-[#f8fafc] shadow-2xl border border-white/80" style={{ transform: 'translateZ(28px)', transformStyle: 'preserve-3d' }}>
-            <div className="absolute left-[22px] top-[20px] h-[50px] w-[118px] rounded-[28px_20px_8px_8px] bg-slate-950/85 shadow-inner" />
-            <div className="absolute bottom-[18px] left-[26px] h-[12px] w-[112px] rounded-full bg-slate-950/80" />
-            <div className="absolute right-[-18px] top-[42px] h-[50px] w-[30px] rounded-r-xl bg-slate-900" />
-            <div className="absolute bottom-[28px] right-[18px] h-[3px] w-[74px] rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.9)]" />
+          <div className="absolute left-[-340px] top-[34px] h-[112px] w-[160px] rounded-[54px_22px_18px_28px] bg-white shadow-2xl border border-white/80" style={{ transform: 'translateZ(26px)' }}>
+            <div className="absolute left-[23px] top-[18px] h-[42px] w-[112px] rounded-[28px_18px_8px_8px] bg-slate-950/85" />
+            <div className="absolute bottom-[18px] left-[26px] h-[9px] w-[106px] rounded-full bg-slate-950/75" />
+            <div className="absolute bottom-[30px] right-[18px] h-[3px] w-[68px] rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.9)]" />
+            <div className="absolute right-[-14px] top-[39px] h-[42px] w-[24px] rounded-r-xl bg-slate-900" />
           </div>
 
-          <div
-            className="absolute left-[-210px] top-[-35px]"
-            style={{
-              width: trailer.width,
-              height: trailer.height,
-              transformStyle: 'preserve-3d',
-            }}
-          >
-            <div
-              className="absolute left-0 top-0 border border-emerald-500/70 bg-emerald-100/10 shadow-[inset_0_0_32px_rgba(16,185,129,0.16)]"
-              style={{
-                width: trailer.width,
-                height: trailer.height,
-                transform: `translateZ(${trailer.depth / 2}px)`,
-              }}
-            />
-            <div
-              className="absolute left-0 top-0 border border-emerald-900/40 bg-slate-950/18"
-              style={{
-                width: trailer.width,
-                height: trailer.depth,
-                transformOrigin: 'top left',
-                transform: `rotateX(90deg) translateY(-${trailer.depth / 2}px) translateZ(0px)`,
-              }}
-            />
-            <div
-              className="absolute left-0 top-0 border border-white/60 bg-white/20"
-              style={{
-                width: trailer.width,
-                height: trailer.depth,
-                transformOrigin: 'top left',
-                transform: `rotateX(90deg) translateY(-${trailer.depth / 2}px) translateZ(${trailer.height}px)`,
-              }}
-            />
-            <div
-              className="absolute left-0 top-0 border border-emerald-700/45 bg-white/14"
-              style={{
-                width: trailer.depth,
-                height: trailer.height,
-                transformOrigin: 'top left',
-                transform: `rotateY(90deg) translateX(-${trailer.depth / 2}px)`,
-              }}
-            />
-            <div
-              className="absolute right-0 top-0 border border-emerald-700/45 bg-white/10"
-              style={{
-                width: trailer.depth,
-                height: trailer.height,
-                transformOrigin: 'top right',
-                transform: `rotateY(90deg) translateX(-${trailer.depth / 2}px)`,
-              }}
-            />
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div
-                key={index}
-                className="absolute top-0 h-full w-[3px] bg-slate-700/45"
-                style={{ left: `${(index / 7) * 100}%`, transform: `translateZ(${trailer.depth / 2 + 2}px)` }}
-              />
+          <div className="absolute left-[-178px] top-[-52px]" style={{ width: trailer.width, height: trailer.height, transformStyle: 'preserve-3d' }}>
+            <div className="absolute left-0 top-0 border border-emerald-500/70 bg-emerald-100/10 shadow-[inset_0_0_28px_rgba(16,185,129,0.16)]" style={{ width: trailer.width, height: trailer.height, transform: `translateZ(${trailer.depth / 2}px)` }} />
+            <div className="absolute left-0 top-0 border border-emerald-800/35 bg-slate-950/10" style={{ width: trailer.width, height: trailer.depth, transformOrigin: 'top left', transform: `rotateX(90deg) translateY(-${trailer.depth / 2}px)` }} />
+            <div className="absolute left-0 top-0 border border-white/55 bg-white/22" style={{ width: trailer.width, height: trailer.depth, transformOrigin: 'top left', transform: `rotateX(90deg) translateY(-${trailer.depth / 2}px) translateZ(${trailer.height}px)` }} />
+            <div className="absolute left-0 top-0 border border-emerald-700/40 bg-white/14" style={{ width: trailer.depth, height: trailer.height, transformOrigin: 'top left', transform: `rotateY(90deg) translateX(-${trailer.depth / 2}px)` }} />
+            <div className="absolute right-0 top-0 border border-emerald-700/40 bg-white/10" style={{ width: trailer.depth, height: trailer.height, transformOrigin: 'top right', transform: `rotateY(90deg) translateX(-${trailer.depth / 2}px)` }} />
+
+            {Array.from({ length: 9 }).map((_, index) => (
+              <div key={index} className="absolute top-0 h-full w-[2px] bg-slate-700/40" style={{ left: (index / 8) * trailer.width, transform: `translateZ(${trailer.depth / 2 + 1}px)` }} />
             ))}
 
-            {visibleItems.map(({ item, left, top, width, height, depth, z }, index) => {
-              const topColor = shadeHex(item.color, 28);
-              const sideColor = shadeHex(item.color, -38);
-              const backColor = shadeHex(item.color, -18);
-              return (
-                <div
-                  key={`${item.id}-${index}`}
-                  className="absolute"
-                  style={{
-                    left,
-                    top,
-                    width,
-                    height,
-                    transformStyle: 'preserve-3d',
-                    transform: `translateZ(${z}px)`,
-                  }}
-                >
-                  <div className="absolute inset-0 border border-black/35 shadow-[0_8px_12px_rgba(0,0,0,0.16)]" style={{ backgroundColor: item.color, transform: `translateZ(${depth / 2}px)` }} />
-                  <div className="absolute inset-0 border border-black/15" style={{ backgroundColor: backColor, transform: `rotateY(180deg) translateZ(${depth / 2}px)` }} />
-                  <div
-                    className="absolute top-0 border border-black/25"
-                    style={{
-                      width: depth,
-                      height,
-                      right: -depth,
-                      backgroundColor: sideColor,
-                      transformOrigin: 'left center',
-                      transform: 'rotateY(90deg)',
-                    }}
-                  />
-                  <div
-                    className="absolute left-0 border border-black/25"
-                    style={{
-                      width,
-                      height: depth,
-                      top: -depth,
-                      backgroundColor: topColor,
-                      transformOrigin: 'bottom center',
-                      transform: 'rotateX(90deg)',
-                    }}
-                  />
-                </div>
-              );
-            })}
+            {boxes.map(({ item, index, x, y, z, width, height, depth }) => (
+              <CargoPrism key={`${item.id}-${index}`} color={item.color} x={x} y={y} z={z} width={width} height={height} depth={depth} />
+            ))}
 
-            {[-0.18, 1.18].map((side) =>
-              [80, 180, 460, 520].map((x, index) => (
-                <div
-                  key={`${side}-${x}-${index}`}
-                  className="absolute h-[42px] w-[42px] rounded-full border-[9px] border-slate-950 bg-slate-500 shadow-xl"
-                  style={{
-                    left: x,
-                    top: trailer.height + 18,
-                    transform: `translateZ(${(side - 0.5) * trailer.depth}px) rotateY(90deg)`,
-                  }}
-                />
-              ))
-            )}
+            {[-1, 1].map((side) => [70, 150, 410, 470].map((x) => (
+              <div
+                key={`${side}-${x}`}
+                className="absolute h-[42px] w-[42px] rounded-full border-[9px] border-slate-950 bg-slate-400 shadow-lg"
+                style={{ left: x, top: trailer.height + 16, transform: `translateZ(${side * (trailer.depth / 2 + 8)}px) rotateY(90deg)` }}
+              />
+            )))}
           </div>
 
-          <div
-            className="absolute left-[-378px] top-[155px] h-[24px] w-[758px] rounded bg-slate-950 shadow-xl"
-            style={{ transform: 'translateZ(0px)' }}
-          />
+          <div className="absolute left-[-350px] top-[152px] h-[22px] w-[744px] rounded bg-slate-950 shadow-xl" />
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/12 to-transparent" />
     </div>
   );
 };
@@ -1218,7 +1143,7 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
 
   return (
     <div className="canvas-container relative w-full h-full bg-[#bebebe]">
-      <TruckImageFallback container={container} placedItems={placedItems} />
+      {container.type === 'truck' && <TruckCss3DView container={container} placedItems={placedItems} />}
       <Canvas
         className={`canvas-container__surface relative z-0 ${container.type === 'truck' ? 'pointer-events-none' : ''}`}
         dpr={[1, 1]}
