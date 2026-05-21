@@ -385,6 +385,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       metalness: 0.5,
       roughness: 0.34,
       side: THREE.DoubleSide,
+      depthWrite: false,
     });
     const glbEdgesMaterial = new THREE.LineBasicMaterial({ color: '#063f2c', transparent: true, opacity: 0.82 });
     const loader = new GLTFLoader();
@@ -404,10 +405,6 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         const cabClearance = Math.min(0.9, Math.max(0.45, l * 0.1));
         const zOffset = (rearAllowance - cabAllowance) / 2 - cabClearance;
         const vertices: number[] = [];
-        const loadSpace = new THREE.Box3(
-          new THREE.Vector3(-w / 2 - 0.03, 0.03, -l / 2 - 0.03),
-          new THREE.Vector3(w / 2 + 0.03, h + 1.2, l / 2 + 0.03)
-        );
         const triangleBox = new THREE.Box3();
 
         const toScenePoint = (source: THREE.Vector3) => new THREE.Vector3(
@@ -421,7 +418,10 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           triangleBox.expandByPoint(a);
           triangleBox.expandByPoint(b);
           triangleBox.expandByPoint(c);
-          return !triangleBox.intersectsBox(loadSpace);
+
+          const overlapsLoadLength = triangleBox.max.z > -l / 2 && triangleBox.min.z < l / 2;
+          const risesAboveDeck = triangleBox.max.y > 0.04;
+          return !(overlapsLoadLength && risesAboveDeck);
         };
 
         gltf.scene.traverse((object) => {
