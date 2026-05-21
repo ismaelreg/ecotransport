@@ -191,9 +191,9 @@ const SoftwareTruckFallback: React.FC<Container3DProps> = ({ container, placedIt
       const ia = idx[i] * 3;
       const ib = idx[i + 1] * 3;
       const ic = idx[i + 2] * 3;
-      a.set(pos[ia] - geometry.center.x, pos[ia + 2] - geometry.center.z, -(pos[ia + 1] - geometry.center.y));
-      b.set(pos[ib] - geometry.center.x, pos[ib + 2] - geometry.center.z, -(pos[ib + 1] - geometry.center.y));
-      c.set(pos[ic] - geometry.center.x, pos[ic + 2] - geometry.center.z, -(pos[ic + 1] - geometry.center.y));
+      a.set(pos[ia] - geometry.center.x, -(pos[ia + 2] - geometry.center.z), pos[ia + 1] - geometry.center.y);
+      b.set(pos[ib] - geometry.center.x, -(pos[ib + 2] - geometry.center.z), pos[ib + 1] - geometry.center.y);
+      c.set(pos[ic] - geometry.center.x, -(pos[ic + 2] - geometry.center.z), pos[ic + 1] - geometry.center.y);
       normal.subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize().applyMatrix4(matrix);
       const points = [a, b, c].map((point) => projectScene(point, camera, matrix, scale, rect.width, rect.height));
       triangles.push({
@@ -323,6 +323,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       new THREE.BoxGeometry(w, h, l),
       new THREE.MeshStandardMaterial({ color: '#10b981', transparent: true, opacity: 0.08, side: THREE.DoubleSide })
     );
+    volumeMesh.renderOrder = 0;
     volumeMesh.position.set(0, h / 2, 0);
     scene.add(volumeMesh);
 
@@ -330,6 +331,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       new THREE.EdgesGeometry(volumeMesh.geometry),
       new THREE.LineBasicMaterial({ color: '#059669' })
     );
+    volumeEdges.renderOrder = 4;
     volumeEdges.position.copy(volumeMesh.position);
     scene.add(volumeEdges);
 
@@ -354,6 +356,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       box.position.set(xPos, yPos, zPos);
       box.castShadow = true;
       box.receiveShadow = true;
+      box.renderOrder = 3;
       cargoGroup.add(box);
 
       const boxEdges = new THREE.LineSegments(
@@ -361,6 +364,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         new THREE.LineBasicMaterial({ color: '#111111' })
       );
       boxEdges.position.copy(box.position);
+      boxEdges.renderOrder = 4;
       cargoGroup.add(boxEdges);
     });
     scene.add(cargoGroup);
@@ -394,11 +398,16 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           if (object instanceof THREE.Mesh) {
             object.castShadow = true;
             object.receiveShadow = true;
+            object.renderOrder = 1;
             object.material = new THREE.MeshStandardMaterial({
               color: '#0f8f5f',
               metalness: 0.55,
               roughness: 0.38,
               envMapIntensity: 1.1,
+              transparent: true,
+              opacity: 0.32,
+              side: THREE.DoubleSide,
+              depthWrite: false,
             });
           }
         });
@@ -406,7 +415,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         const sourceSize = sourceBox.getSize(new THREE.Vector3());
         const targetLength = container.length / 100 + 2.8;
         const scale = targetLength / Math.max(sourceSize.y, 0.001);
-        model.rotation.x = -Math.PI / 2;
+        model.rotation.x = Math.PI / 2;
         model.scale.setScalar(scale);
         model.updateMatrixWorld(true);
         const fittedBox = new THREE.Box3().setFromObject(model);
