@@ -1,11 +1,13 @@
 
-import React, { useEffect, useMemo, Suspense } from 'react';
+import React, { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, Text, PerspectiveCamera, Edges, Loader, RoundedBox, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Container, PlacedItem } from '../types';
 
-const EV_TRUCK_GLB_URL = '/models/ev-truck-web.glb';
+const EV_TRUCK_GLB_URL = '/models/ev-truck-lite.glb';
 const USE_GLB_TRUCK = true;
 
 // Opción A: Modelo Proxy Ligero (Optimizado para web)
@@ -50,6 +52,216 @@ const CanvasAutoSizer: React.FC = () => {
   }, [gl, setSize]);
 
   return null;
+};
+
+const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems, showWeightHeatmap, cameraView = 'iso' }) => {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [webglFailed, setWebglFailed] = useState(false);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    setWebglFailed(false);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#bebebe');
+
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+    camera.position.set(...(cameraView === 'front' ? [0, 5, 14] as [number, number, number] : [10, 8, 12] as [number, number, number]));
+
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    } catch {
+      setWebglFailed(true);
+      return;
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.domElement.style.display = 'block';
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      setWebglFailed(true);
+    };
+    renderer.domElement.addEventListener('webglcontextlost', handleContextLost, false);
+    host.appendChild(renderer.domElement);
+
+    const controls = new ThreeOrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.minDistance = 2;
+    controls.maxDistance = 50;
+
+    scene.add(new THREE.AmbientLight('#ffffff', 0.72));
+
+    const keyLight = new THREE.SpotLight('#ffffff', 2, 0, 0.25, 1);
+    keyLight.position.set(10, 15, 10);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight('#ffffff', 0.55);
+    fillLight.position.set(-10, 10, -5);
+    scene.add(fillLight);
+
+    const grid = new THREE.GridHelper(60, 60, '#999999', '#bbbbbb');
+    grid.position.y = -0.05;
+    scene.add(grid);
+
+    const w = container.width / 100;
+    const h = (container.height || 240) / 100;
+    const l = container.length / 100;
+
+    const volumeMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, l),
+      new THREE.MeshStandardMaterial({ color: '#10b981', transparent: true, opacity: 0.08, side: THREE.DoubleSide })
+    );
+    volumeMesh.position.set(0, h / 2, 0);
+    scene.add(volumeMesh);
+
+    const volumeEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(volumeMesh.geometry),
+      new THREE.LineBasicMaterial({ color: '#059669' })
+    );
+    volumeEdges.position.copy(volumeMesh.position);
+    scene.add(volumeEdges);
+
+    const cargoGroup = new THREE.Group();
+    placedItems.forEach((item) => {
+      const xPos = (item.position[0] - container.width / 2) / 100;
+      const yPos = item.position[1] / 100;
+      const zPos = (item.position[2] - container.length / 2) / 100;
+      const itemW = item.width / 100;
+      const itemH = item.height / 100;
+      const itemL = item.length / 100;
+      const box = new THREE.Mesh(
+        new THREE.BoxGeometry(itemW, itemH, itemL),
+        new THREE.MeshStandardMaterial({
+          color: item.color,
+          roughness: 0.4,
+          metalness: 0.05,
+          emissive: new THREE.Color(item.color),
+          emissiveIntensity: 0.08,
+        })
+      );
+      box.position.set(xPos, yPos, zPos);
+      box.castShadow = true;
+      box.receiveShadow = true;
+      cargoGroup.add(box);
+
+      const boxEdges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(box.geometry),
+        new THREE.LineBasicMaterial({ color: '#111111' })
+      );
+      boxEdges.position.copy(box.position);
+      cargoGroup.add(boxEdges);
+    });
+    scene.add(cargoGroup);
+
+    if (showWeightHeatmap && placedItems.length > 0) {
+      let totalWeight = 0;
+      const weighted = new THREE.Vector3();
+      placedItems.forEach((item) => {
+        totalWeight += item.weight;
+        weighted.x += item.position[0] * item.weight;
+        weighted.y += item.position[1] * item.weight;
+        weighted.z += item.position[2] * item.weight;
+      });
+      weighted.divideScalar(totalWeight);
+      const cog = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 16, 16),
+        new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#ef4444', emissiveIntensity: 1.6 })
+      );
+      cog.position.set((weighted.x - container.width / 2) / 100, weighted.y / 100, (weighted.z - container.length / 2) / 100);
+      scene.add(cog);
+    }
+
+    let cancelled = false;
+    const loader = new GLTFLoader();
+    loader.load(
+      EV_TRUCK_GLB_URL,
+      (gltf) => {
+        if (cancelled) return;
+        const model = gltf.scene;
+        model.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            object.castShadow = true;
+            object.receiveShadow = true;
+            object.material = new THREE.MeshStandardMaterial({
+              color: '#0f8f5f',
+              metalness: 0.55,
+              roughness: 0.38,
+              envMapIntensity: 1.1,
+            });
+          }
+        });
+        const targetLength = container.length / 100 + 2.8;
+        const scale = targetLength / 1.1418512038667852;
+        model.position.set(0, -0.36, 0.65);
+        model.scale.setScalar(scale);
+        scene.add(model);
+      },
+      undefined,
+      () => {
+        scene.add(new THREE.AxesHelper(0.1));
+      }
+    );
+
+    const syncSize = () => {
+      const rect = host.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      camera.aspect = rect.width / rect.height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(rect.width, rect.height, false);
+    };
+
+    const resizeObserver = new ResizeObserver(syncSize);
+    resizeObserver.observe(host);
+    syncSize();
+
+    let frame = 0;
+    const render = () => {
+      controls.update();
+      renderer.render(scene, camera);
+      frame = requestAnimationFrame(render);
+    };
+    render();
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      controls.dispose();
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry?.dispose();
+          if (Array.isArray(object.material)) object.material.forEach((material) => material.dispose());
+          else object.material?.dispose();
+        }
+      });
+      renderer.dispose();
+      renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
+      renderer.domElement.remove();
+    };
+  }, [cameraView, container, placedItems, showWeightHeatmap]);
+
+  if (webglFailed) {
+    return (
+      <div className="w-full h-full bg-[#bebebe] flex items-center justify-center p-8 text-center">
+        <div className="max-w-sm rounded-2xl bg-white/90 border border-emerald-100 shadow-xl p-6">
+          <div className="text-sm font-black uppercase text-emerald-900">Visor 3D no disponible</div>
+          <p className="mt-2 text-xs font-bold text-gray-600 leading-relaxed">
+            El navegador perdió el contexto WebGL. Recarga la pestaña para volver a montar el GLB del camión y el cubicaje 3D.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <div ref={hostRef} className="w-full h-full bg-[#bebebe]" />;
 };
 
 class GlbErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
@@ -997,6 +1209,17 @@ const CenterOfGravity: React.FC<{ items: PlacedItem[]; container: Container }> =
 
 export const Container3D: React.FC<Container3DProps> = ({ container, placedItems, showWeightHeatmap, cameraView = 'iso' }) => {
   const cameraPosition: [number, number, number] = cameraView === 'front' ? [0, 5, 14] : [10, 8, 12];
+
+  if (container.type === 'truck') {
+    return (
+      <DirectTruckViewer
+        container={container}
+        placedItems={placedItems}
+        showWeightHeatmap={showWeightHeatmap}
+        cameraView={cameraView}
+      />
+    );
+  }
 
   return (
     <div className="canvas-container relative w-full h-full bg-[#bebebe]">
