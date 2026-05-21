@@ -397,18 +397,15 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         const sourceCenter = sourceBox.getCenter(new THREE.Vector3());
         const sourceSize = sourceBox.getSize(new THREE.Vector3());
         const cabAllowance = Math.min(2.8, Math.max(2.0, l * 0.34));
-        const rearAllowance = 0.18;
         const scaleX = (w + 0.32) / Math.max(sourceSize.x, 0.001);
         const scaleY = (h + 0.34) / Math.max(sourceSize.z, 0.001);
-        const scaleZ = (l + cabAllowance + rearAllowance) / Math.max(sourceSize.y, 0.001);
-        const cabClearance = Math.min(0.9, Math.max(0.45, l * 0.1));
-        const zOffset = (rearAllowance - cabAllowance) / 2 - cabClearance;
+        const scaleZ = (l + cabAllowance) / Math.max(sourceSize.y, 0.001);
         const vertices: number[] = [];
 
         const toScenePoint = (source: THREE.Vector3) => new THREE.Vector3(
           (source.x - sourceCenter.x) * scaleX,
           (sourceBox.max.z - source.z) * scaleY - 0.04,
-          (source.y - sourceCenter.y) * scaleZ + zOffset
+          (source.y - sourceCenter.y) * scaleZ
         );
 
         const shouldKeepTriangle = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => {
@@ -425,9 +422,9 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           if (!insideCargo) return true;
 
           const nearFloor = cy < 0.06;
-          const nearRearEnd = Math.abs(cz - l / 2) < 0.16;
+          const nearEnd = Math.abs(cz + l / 2) < 0.16 || Math.abs(cz - l / 2) < 0.16;
           const nearTopSideRail = Math.abs(Math.abs(cx) - w / 2) < 0.32 && cy > h - 0.15;
-          return nearFloor || nearRearEnd || nearTopSideRail;
+          return nearFloor || nearEnd || nearTopSideRail;
         };
 
         gltf.scene.traverse((object) => {
