@@ -284,6 +284,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.localClippingEnabled = true;
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     renderer.domElement.style.display = 'block';
@@ -324,6 +325,10 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const w = container.width / 100;
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
+    const truckCutawayPlanes = [
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 0.38),
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), w / 2 + 0.38),
+    ];
 
     const volumeEdges = new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, l)),
@@ -405,6 +410,8 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           materials.forEach((material) => {
             material.side = THREE.DoubleSide;
             material.depthWrite = true;
+            material.clippingPlanes = truckCutawayPlanes;
+            material.clipShadows = true;
             if ('color' in material && material.color instanceof THREE.Color) {
               material.color.set('#0f8f5f');
             }
@@ -425,10 +432,10 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           });
         });
 
-        const cabAllowance = Math.min(2.8, Math.max(2.0, l * 0.34));
+        const cabAllowance = Math.min(7.2, Math.max(4.5, l * 0.46));
         const targetLength = l + cabAllowance;
-        const targetWidth = w + 1.1;
-        const targetHeight = h + 1;
+        const targetWidth = w + 2.2;
+        const targetHeight = h + 1.45;
 
         const rotationCandidates = [
           new THREE.Euler(0, 0, 0),
