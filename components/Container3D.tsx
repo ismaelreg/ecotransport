@@ -318,20 +318,21 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const w = container.width / 100;
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
+    const loadZOffset = Math.min(1.3, Math.max(0.55, l * 0.16));
 
     const volumeEdges = new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, l)),
       new THREE.LineBasicMaterial({ color: '#059669' })
     );
     volumeEdges.renderOrder = 4;
-    volumeEdges.position.set(0, h / 2, 0);
+    volumeEdges.position.set(0, h / 2, loadZOffset);
     scene.add(volumeEdges);
 
     const cargoGroup = new THREE.Group();
     placedItems.forEach((item) => {
       const xPos = (item.position[0] - container.width / 2) / 100;
       const yPos = item.position[1] / 100;
-      const zPos = (item.position[2] - container.length / 2) / 100;
+      const zPos = (item.position[2] - container.length / 2) / 100 + loadZOffset;
       const itemW = item.width / 100;
       const itemH = item.height / 100;
       const itemL = item.length / 100;
@@ -375,7 +376,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         new THREE.SphereGeometry(0.15, 16, 16),
         new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#ef4444', emissiveIntensity: 1.6 })
       );
-      cog.position.set((weighted.x - container.width / 2) / 100, weighted.y / 100, (weighted.z - container.length / 2) / 100);
+      cog.position.set((weighted.x - container.width / 2) / 100, weighted.y / 100, (weighted.z - container.length / 2) / 100 + loadZOffset);
       scene.add(cog);
     }
 
@@ -419,7 +420,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           triangleBox.expandByPoint(b);
           triangleBox.expandByPoint(c);
 
-          const overlapsLoadLength = triangleBox.max.z > -l / 2 && triangleBox.min.z < l / 2;
+          const overlapsLoadLength = triangleBox.max.z > loadZOffset - l / 2 && triangleBox.min.z < loadZOffset + l / 2;
           const risesAboveDeck = triangleBox.max.y > 0.04;
           return !(overlapsLoadLength && risesAboveDeck);
         };
