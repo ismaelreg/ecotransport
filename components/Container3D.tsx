@@ -4,10 +4,12 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, Text, PerspectiveCamera, Edges, Loader, RoundedBox, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Container, PlacedItem } from '../types';
 
-const EV_TRUCK_GLB_URL = '/models/ev-truck-lite.glb';
+const EV_TRUCK_GLB_URL = '/models/ev-truck-original.glb';
+const DRACO_DECODER_PATH = '/draco/';
 const USE_GLB_TRUCK = true;
 
 // Opción A: Modelo Proxy Ligero (Optimizado para web)
@@ -64,6 +66,9 @@ const SoftwareTruckFallback: React.FC<Container3DProps> = ({ container, placedIt
   useEffect(() => {
     let cancelled = false;
     const loader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
+    loader.setDRACOLoader(dracoLoader);
     loader.load(EV_TRUCK_GLB_URL, (gltf) => {
       if (cancelled) return;
       let sourceGeometry: THREE.BufferGeometry | null = null;
@@ -91,6 +96,7 @@ const SoftwareTruckFallback: React.FC<Container3DProps> = ({ container, placedIt
 
     return () => {
       cancelled = true;
+      dracoLoader.dispose();
     };
   }, []);
 
@@ -329,12 +335,12 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
     const cargoGroup = new THREE.Group();
     placedItems.forEach((item) => {
-      const xPos = (item.position[0] - container.width / 2) / 100;
-      const yPos = item.position[1] / 100;
-      const zPos = (item.position[2] - container.length / 2) / 100;
       const itemW = item.width / 100;
       const itemH = item.height / 100;
       const itemL = item.length / 100;
+      const xPos = (item.position[0] + item.width / 2 - container.width / 2) / 100;
+      const yPos = (item.position[1] + item.height / 2) / 100;
+      const zPos = (item.position[2] + item.length / 2 - container.length / 2) / 100;
       const box = new THREE.Mesh(
         new THREE.BoxGeometry(itemW, itemH, itemL),
         new THREE.MeshStandardMaterial({
@@ -366,9 +372,9 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       const weighted = new THREE.Vector3();
       placedItems.forEach((item) => {
         totalWeight += item.weight;
-        weighted.x += item.position[0] * item.weight;
-        weighted.y += item.position[1] * item.weight;
-        weighted.z += item.position[2] * item.weight;
+        weighted.x += (item.position[0] + item.width / 2) * item.weight;
+        weighted.y += (item.position[1] + item.height / 2) * item.weight;
+        weighted.z += (item.position[2] + item.length / 2) * item.weight;
       });
       weighted.divideScalar(totalWeight);
       const cog = new THREE.Mesh(
@@ -380,90 +386,123 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     }
 
     let cancelled = false;
-    const glbBodyMaterial = new THREE.MeshStandardMaterial({
-      color: '#0f8f5f',
-      metalness: 0.5,
-      roughness: 0.34,
-      side: THREE.DoubleSide,
-    });
-    const glbEdgesMaterial = new THREE.LineBasicMaterial({ color: '#063f2c', transparent: true, opacity: 0.82 });
     const loader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
+    loader.setDRACOLoader(dracoLoader);
     loader.load(
       EV_TRUCK_GLB_URL,
       (gltf) => {
         if (cancelled) return;
-        gltf.scene.updateMatrixWorld(true);
-        const sourceBox = new THREE.Box3().setFromObject(gltf.scene);
-        const sourceCenter = sourceBox.getCenter(new THREE.Vector3());
-        const sourceSize = sourceBox.getSize(new THREE.Vector3());
-        const cabAllowance = Math.min(2.8, Math.max(2.0, l * 0.34));
-        const scaleX = (w + 0.32) / Math.max(sourceSize.x, 0.001);
-        const scaleY = (h + 0.34) / Math.max(sourceSize.z, 0.001);
-        const scaleZ = (l + cabAllowance) / Math.max(sourceSize.y, 0.001);
-        const vertices: number[] = [];
-
-        const toScenePoint = (source: THREE.Vector3) => new THREE.Vector3(
-          (source.x - sourceCenter.x) * scaleX,
-          (sourceBox.max.z - source.z) * scaleY - 0.04,
-          (source.y - sourceCenter.y) * scaleZ
-        );
-
-        const shouldKeepTriangle = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => {
-          const cx = (a.x + b.x + c.x) / 3;
-          const cy = (a.y + b.y + c.y) / 3;
-          const cz = (a.z + b.z + c.z) / 3;
-          const insideCargo =
-            Math.abs(cx) < w / 2 + 0.34 &&
-            cz > -l / 2 &&
-            cz < l / 2 &&
-            cy > 0.04 &&
-            cy < h + 0.22;
-
-          if (!insideCargo) return true;
-
-          const nearFloor = cy < 0.06;
-          const nearEnd = Math.abs(cz + l / 2) < 0.16 || Math.abs(cz - l / 2) < 0.16;
-          const nearTopSideRail = Math.abs(Math.abs(cx) - w / 2) < 0.32 && cy > h - 0.15;
-          return nearFloor || nearEnd || nearTopSideRail;
-        };
-
-        gltf.scene.traverse((object) => {
+        const model = gltf.scene;
+        model.traverse((object) => {
           if (!(object instanceof THREE.Mesh)) return;
-          const geometry = object.geometry;
-          const position = geometry.getAttribute('position');
-          if (!position) return;
-          const index = geometry.getIndex();
-          const sourceVertex = new THREE.Vector3();
-          const readPoint = (vertexIndex: number) => {
-            sourceVertex.fromBufferAttribute(position, vertexIndex).applyMatrix4(object.matrixWorld);
-            return toScenePoint(sourceVertex);
-          };
-          const triangleCount = index ? index.count / 3 : position.count / 3;
-          for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += 1) {
-            const ai = index ? index.getX(triangleIndex * 3) : triangleIndex * 3;
-            const bi = index ? index.getX(triangleIndex * 3 + 1) : triangleIndex * 3 + 1;
-            const ci = index ? index.getX(triangleIndex * 3 + 2) : triangleIndex * 3 + 2;
-            const a = readPoint(ai);
-            const b = readPoint(bi);
-            const c = readPoint(ci);
-            if (!shouldKeepTriangle(a, b, c)) continue;
-            vertices.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
-          }
+          object.castShadow = true;
+          object.receiveShadow = true;
+          object.renderOrder = 1;
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => {
+            material.side = THREE.DoubleSide;
+            material.depthWrite = true;
+            if ('color' in material && material.color instanceof THREE.Color) {
+              material.color.set('#0f8f5f');
+            }
+            if ('map' in material) {
+              material.map = null;
+            }
+            if ('emissive' in material && material.emissive instanceof THREE.Color) {
+              material.emissive.set('#063f2c');
+              material.emissiveIntensity = 0.12;
+            }
+            if ('metalness' in material && typeof material.metalness === 'number') {
+              material.metalness = Math.max(material.metalness, 0.34);
+            }
+            if ('roughness' in material && typeof material.roughness === 'number') {
+              material.roughness = Math.min(Math.max(material.roughness, 0.28), 0.48);
+            }
+            material.needsUpdate = true;
+          });
         });
 
-        if (vertices.length === 0) return;
-        const fittedGeometry = new THREE.BufferGeometry();
-        fittedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        fittedGeometry.computeVertexNormals();
-        const fittedModel = new THREE.Mesh(fittedGeometry, glbBodyMaterial);
-        fittedModel.castShadow = true;
-        fittedModel.receiveShadow = true;
-        fittedModel.renderOrder = 1;
-        scene.add(fittedModel);
+        model.updateMatrixWorld(true);
+        const initialBox = new THREE.Box3().setFromObject(model);
+        const initialSize = initialBox.getSize(new THREE.Vector3());
+        const longestAxis = Math.max(initialSize.x, initialSize.y, initialSize.z);
+        model.rotation.set(0, 0, 0);
+        if (longestAxis === initialSize.y) model.rotation.x = Math.PI / 2;
+        else if (longestAxis === initialSize.x) model.rotation.y = Math.PI / 2;
 
-        const fittedEdges = new THREE.LineSegments(new THREE.EdgesGeometry(fittedGeometry, 28), glbEdgesMaterial);
-        fittedEdges.renderOrder = 2;
-        scene.add(fittedEdges);
+        model.updateMatrixWorld(true);
+        const orientedBox = new THREE.Box3().setFromObject(model);
+        const orientedSize = orientedBox.getSize(new THREE.Vector3());
+        if (orientedSize.y > Math.max(orientedSize.x, orientedSize.z) * 1.25) {
+          model.rotation.z = -Math.PI / 2;
+          model.updateMatrixWorld(true);
+        }
+
+        const modelBox = new THREE.Box3().setFromObject(model);
+        const modelSize = modelBox.getSize(new THREE.Vector3());
+        const cabAllowance = Math.min(2.8, Math.max(2.0, l * 0.34));
+        const targetLength = l + cabAllowance;
+        const targetWidth = w + 0.42;
+        const targetHeight = h + 0.72;
+        const scale = Math.min(
+          targetLength / Math.max(modelSize.z, 0.001),
+          targetWidth / Math.max(modelSize.x, 0.001),
+          targetHeight / Math.max(modelSize.y, 0.001)
+        );
+        model.scale.setScalar(scale);
+        model.updateMatrixWorld(true);
+
+        const fittedBox = new THREE.Box3().setFromObject(model);
+        const fittedCenter = fittedBox.getCenter(new THREE.Vector3());
+        const rearAlignment = l / 2 + 0.18;
+        model.position.set(
+          -fittedCenter.x,
+          -fittedBox.min.y - 0.04,
+          rearAlignment - fittedBox.max.z
+        );
+
+        model.updateMatrixWorld(true);
+        const alignedBox = new THREE.Box3().setFromObject(model);
+        const alignedSize = alignedBox.getSize(new THREE.Vector3());
+        if (alignedSize.x < alignedSize.z * 0.22 || alignedSize.y > alignedSize.z * 0.7) {
+          model.rotation.set(0, Math.PI / 2, 0);
+          model.scale.setScalar(1);
+          model.updateMatrixWorld(true);
+          const retryBox = new THREE.Box3().setFromObject(model);
+          const retrySize = retryBox.getSize(new THREE.Vector3());
+          const retryScale = Math.min(
+            targetLength / Math.max(retrySize.z, 0.001),
+            targetWidth / Math.max(retrySize.x, 0.001),
+            targetHeight / Math.max(retrySize.y, 0.001)
+          );
+          model.scale.setScalar(retryScale);
+          model.updateMatrixWorld(true);
+          const retryFittedBox = new THREE.Box3().setFromObject(model);
+          const retryCenter = retryFittedBox.getCenter(new THREE.Vector3());
+          model.position.set(
+            -retryCenter.x,
+            -retryFittedBox.min.y - 0.04,
+            rearAlignment - retryFittedBox.max.z
+          );
+        }
+
+        scene.add(model);
+        const modelMeta = {
+          name: 'ev-truck-original',
+          box: new THREE.Box3().setFromObject(model),
+        };
+        if (import.meta.env.DEV) {
+          console.info('[ecotransport] GLB cargado', modelMeta.name, modelMeta.box.getSize(new THREE.Vector3()).toArray());
+        }
+
+        cargoGroup.position.z = -0.02;
+        cargoGroup.traverse((object) => {
+          if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
+            object.renderOrder = Math.max(object.renderOrder, 5);
+          }
+        });
       },
       undefined,
       () => {
@@ -493,6 +532,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
     return () => {
       cancelled = true;
+      dracoLoader.dispose();
       window.clearTimeout(healthTimer);
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
