@@ -404,6 +404,11 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         const cabClearance = Math.min(0.9, Math.max(0.45, l * 0.1));
         const zOffset = (rearAllowance - cabAllowance) / 2 - cabClearance;
         const vertices: number[] = [];
+        const loadSpace = new THREE.Box3(
+          new THREE.Vector3(-w / 2 - 0.03, 0.03, -l / 2 - 0.03),
+          new THREE.Vector3(w / 2 + 0.03, h + 1.2, l / 2 + 0.03)
+        );
+        const triangleBox = new THREE.Box3();
 
         const toScenePoint = (source: THREE.Vector3) => new THREE.Vector3(
           (source.x - sourceCenter.x) * scaleX,
@@ -412,22 +417,11 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         );
 
         const shouldKeepTriangle = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => {
-          const cx = (a.x + b.x + c.x) / 3;
-          const cy = (a.y + b.y + c.y) / 3;
-          const cz = (a.z + b.z + c.z) / 3;
-          const insideCargo =
-            Math.abs(cx) < w / 2 + 0.34 &&
-            cz > -l / 2 &&
-            cz < l / 2 &&
-            cy > 0.04 &&
-            cy < h + 0.22;
-
-          if (!insideCargo) return true;
-
-          const nearFloor = cy < 0.06;
-          const nearRearEnd = Math.abs(cz - l / 2) < 0.16;
-          const nearTopSideRail = Math.abs(Math.abs(cx) - w / 2) < 0.32 && cy > h - 0.15;
-          return nearFloor || nearRearEnd || nearTopSideRail;
+          triangleBox.makeEmpty();
+          triangleBox.expandByPoint(a);
+          triangleBox.expandByPoint(b);
+          triangleBox.expandByPoint(c);
+          return !triangleBox.intersectsBox(loadSpace);
         };
 
         gltf.scene.traverse((object) => {
