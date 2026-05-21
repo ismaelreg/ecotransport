@@ -54,6 +54,205 @@ const CanvasAutoSizer: React.FC = () => {
   return null;
 };
 
+const SoftwareTruckFallback: React.FC<Container3DProps> = ({ container, placedItems }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const rotationRef = useRef({ x: -0.18, y: -0.72 });
+  const dragRef = useRef<{ x: number; y: number; rx: number; ry: number } | null>(null);
+  const geometryRef = useRef<{ positions: Float32Array; indices: Uint16Array | Uint32Array; center: THREE.Vector3; size: THREE.Vector3 } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loader = new GLTFLoader();
+    loader.load(EV_TRUCK_GLB_URL, (gltf) => {
+      if (cancelled) return;
+      let sourceGeometry: THREE.BufferGeometry | null = null;
+      gltf.scene.updateMatrixWorld(true);
+      gltf.scene.traverse((object) => {
+        if (!sourceGeometry && object instanceof THREE.Mesh) {
+          sourceGeometry = object.geometry.clone();
+          sourceGeometry.applyMatrix4(object.matrixWorld);
+        }
+      });
+      if (!sourceGeometry) return;
+      const position = sourceGeometry.getAttribute('position');
+      const index = sourceGeometry.getIndex();
+      if (!position || !index) return;
+      sourceGeometry.computeBoundingBox();
+      const box = sourceGeometry.boundingBox || new THREE.Box3();
+      geometryRef.current = {
+        positions: position.array as Float32Array,
+        indices: index.array as Uint16Array | Uint32Array,
+        center: box.getCenter(new THREE.Vector3()),
+        size: box.getSize(new THREE.Vector3()),
+      };
+      draw();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const projectScene = (point: THREE.Vector3, camera: THREE.PerspectiveCamera, matrix: THREE.Matrix4, scale: number, width: number, height: number) => {
+    const projected = point.clone().multiplyScalar(scale).applyMatrix4(matrix).project(camera);
+    return {
+      x: (projected.x * 0.5 + 0.5) * width,
+      y: (-projected.y * 0.5 + 0.5) * height,
+      z: projected.z,
+    };
+  };
+
+  const drawCargoBox = (
+    ctx: CanvasRenderingContext2D,
+    camera: THREE.PerspectiveCamera,
+    matrix: THREE.Matrix4,
+    scale: number,
+    width: number,
+    height: number,
+    item: PlacedItem
+  ) => {
+    const cargoLength = container.length / 100;
+    const cargoWidth = container.width / 100;
+    const cargoHeight = (container.height || 240) / 100;
+    const itemW = item.width / 100;
+    const itemH = item.height / 100;
+    const itemL = item.length / 100;
+    const baseX = (item.position[0] - container.width / 2) / 100;
+    const baseY = item.position[1] / 100;
+    const baseZ = (item.position[2] - container.length / 2) / 100;
+    const cargoScale = 0.13;
+    const offset = new THREE.Vector3(0, -0.08, 0.02);
+    const corners = [
+      [baseX, baseY, baseZ], [baseX + itemW, baseY, baseZ], [baseX + itemW, baseY + itemH, baseZ], [baseX, baseY + itemH, baseZ],
+      [baseX, baseY, baseZ + itemL], [baseX + itemW, baseY, baseZ + itemL], [baseX + itemW, baseY + itemH, baseZ + itemL], [baseX, baseY + itemH, baseZ + itemL],
+    ].map(([x, y, z]) => new THREE.Vector3(
+      (x / cargoWidth) * 0.24,
+      (y / cargoHeight) * 0.24 - 0.18,
+      (z / cargoLength) * 1.0
+    ).multiplyScalar(cargoScale).add(offset));
+    const faces = [
+      [0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [3, 2, 6, 7], [1, 5, 6, 2], [0, 3, 7, 4],
+    ];
+    const projected = corners.map((corner) => projectScene(corner, camera, matrix, scale, width, height));
+    faces
+      .map((face) => ({ face, z: face.reduce((sum, idx) => sum + projected[idx].z, 0) / face.length }))
+      .sort((a, b) => b.z - a.z)
+      .forEach(({ face }, faceIndex) => {
+        ctx.beginPath();
+        face.forEach((idx, i) => {
+          const p = projected[idx];
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        ctx.closePath();
+        ctx.fillStyle = faceIndex === 0 ? item.color : faceIndex === 1 ? item.color : `${item.color}dd`;
+        ctx.strokeStyle = 'rgba(17, 24, 39, 0.45)';
+        ctx.lineWidth = 1;
+        ctx.fill();
+        ctx.stroke();
+      });
+  };
+
+  const draw = () => {
+    const canvas = canvasRef.current;
+    const host = hostRef.current;
+    const geometry = geometryRef.current;
+    if (!canvas || !host || !geometry) return;
+    const rect = host.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.fillStyle = '#bebebe';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    const camera = new THREE.PerspectiveCamera(34, rect.width / rect.height, 0.1, 10);
+    camera.position.set(0, 0, 2.9);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    const matrix = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rotationRef.current.x, rotationRef.current.y, 0));
+    const maxSize = Math.max(geometry.size.x, geometry.size.z, geometry.size.y);
+    const scale = 1.45 / maxSize;
+    const triangles: Array<{ points: { x: number; y: number; z: number }[]; z: number; light: number }> = [];
+    const pos = geometry.positions;
+    const idx = geometry.indices;
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+    for (let i = 0; i < idx.length; i += 3) {
+      const ia = idx[i] * 3;
+      const ib = idx[i + 1] * 3;
+      const ic = idx[i + 2] * 3;
+      a.set(pos[ia] - geometry.center.x, pos[ia + 2] - geometry.center.z, -(pos[ia + 1] - geometry.center.y));
+      b.set(pos[ib] - geometry.center.x, pos[ib + 2] - geometry.center.z, -(pos[ib + 1] - geometry.center.y));
+      c.set(pos[ic] - geometry.center.x, pos[ic + 2] - geometry.center.z, -(pos[ic + 1] - geometry.center.y));
+      normal.subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize().applyMatrix4(matrix);
+      const points = [a, b, c].map((point) => projectScene(point, camera, matrix, scale, rect.width, rect.height));
+      triangles.push({
+        points,
+        z: (points[0].z + points[1].z + points[2].z) / 3,
+        light: Math.max(0.35, Math.min(0.95, 0.52 + normal.z * 0.32 + normal.y * 0.16)),
+      });
+    }
+    triangles.sort((left, right) => right.z - left.z);
+    triangles.forEach(({ points, light }) => {
+      const g = Math.round(105 + light * 70);
+      const bColor = Math.round(82 + light * 70);
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      ctx.lineTo(points[1].x, points[1].y);
+      ctx.lineTo(points[2].x, points[2].y);
+      ctx.closePath();
+      ctx.fillStyle = `rgb(14, ${g}, ${bColor})`;
+      ctx.fill();
+    });
+    placedItems.slice(0, 120).forEach((item) => drawCargoBox(ctx, camera, matrix, scale, rect.width, rect.height, item));
+  };
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const observer = new ResizeObserver(draw);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [placedItems, container]);
+
+  const startDrag = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    dragRef.current = { x: event.clientX, y: event.clientY, rx: rotationRef.current.x, ry: rotationRef.current.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveDrag = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!dragRef.current) return;
+    rotationRef.current = {
+      x: Math.max(-0.9, Math.min(0.35, dragRef.current.rx - (event.clientY - dragRef.current.y) * 0.006)),
+      y: dragRef.current.ry + (event.clientX - dragRef.current.x) * 0.008,
+    };
+    draw();
+  };
+
+  return (
+    <div ref={hostRef} className="w-full h-full bg-[#bebebe]">
+      <canvas
+        ref={canvasRef}
+        className="block w-full h-full cursor-grab active:cursor-grabbing"
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={() => { dragRef.current = null; }}
+        onPointerCancel={() => { dragRef.current = null; }}
+      />
+    </div>
+  );
+};
+
 const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems, showWeightHeatmap, cameraView = 'iso' }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const [webglFailed, setWebglFailed] = useState(false);
@@ -88,6 +287,11 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     };
     renderer.domElement.addEventListener('webglcontextlost', handleContextLost, false);
     host.appendChild(renderer.domElement);
+    const healthTimer = window.setTimeout(() => {
+      if (renderer.getContext().isContextLost()) {
+        setWebglFailed(true);
+      }
+    }, 600);
 
     const controls = new ThreeOrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -198,10 +402,20 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
             });
           }
         });
+        const sourceBox = new THREE.Box3().setFromObject(model);
+        const sourceSize = sourceBox.getSize(new THREE.Vector3());
         const targetLength = container.length / 100 + 2.8;
-        const scale = targetLength / 1.1418512038667852;
-        model.position.set(0, -0.36, 0.65);
+        const scale = targetLength / Math.max(sourceSize.y, 0.001);
+        model.rotation.x = -Math.PI / 2;
         model.scale.setScalar(scale);
+        model.updateMatrixWorld(true);
+        const fittedBox = new THREE.Box3().setFromObject(model);
+        const fittedCenter = fittedBox.getCenter(new THREE.Vector3());
+        model.position.set(
+          -fittedCenter.x,
+          -fittedBox.min.y - 0.05,
+          -fittedCenter.z
+        );
         scene.add(model);
       },
       undefined,
@@ -232,6 +446,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
     return () => {
       cancelled = true;
+      window.clearTimeout(healthTimer);
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       controls.dispose();
@@ -250,14 +465,12 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
   if (webglFailed) {
     return (
-      <div className="w-full h-full bg-[#bebebe] flex items-center justify-center p-8 text-center">
-        <div className="max-w-sm rounded-2xl bg-white/90 border border-emerald-100 shadow-xl p-6">
-          <div className="text-sm font-black uppercase text-emerald-900">Visor 3D no disponible</div>
-          <p className="mt-2 text-xs font-bold text-gray-600 leading-relaxed">
-            El navegador perdió el contexto WebGL. Recarga la pestaña para volver a montar el GLB del camión y el cubicaje 3D.
-          </p>
-        </div>
-      </div>
+      <SoftwareTruckFallback
+        container={container}
+        placedItems={placedItems}
+        showWeightHeatmap={showWeightHeatmap}
+        cameraView={cameraView}
+      />
     );
   }
 
