@@ -319,20 +319,80 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
 
-    const volumeMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h, l),
-      new THREE.MeshStandardMaterial({ color: '#10b981', transparent: true, opacity: 0.08, side: THREE.DoubleSide })
-    );
-    volumeMesh.renderOrder = 0;
-    volumeMesh.position.set(0, h / 2, 0);
-    scene.add(volumeMesh);
+    const addBox = (
+      group: THREE.Group,
+      size: [number, number, number],
+      position: [number, number, number],
+      material: THREE.Material
+    ) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
+      mesh.position.set(...position);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+      return mesh;
+    };
+
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: '#047857', metalness: 0.28, roughness: 0.42 });
+    const baseMaterial = new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.42, roughness: 0.36 });
+    const cabMaterial = new THREE.MeshStandardMaterial({ color: '#059669', metalness: 0.38, roughness: 0.34 });
+    const glassMaterial = new THREE.MeshStandardMaterial({ color: '#111827', metalness: 0.15, roughness: 0.2 });
+    const lightMaterial = new THREE.MeshStandardMaterial({ color: '#a7f3d0', emissive: '#10b981', emissiveIntensity: 1.5 });
+
+    const truckShell = new THREE.Group();
+    const rail = 0.08;
+    const sideX = w / 2 + rail * 0.9;
+    addBox(truckShell, [w + rail * 2.2, 0.12, l + rail * 1.8], [0, -0.06, 0], baseMaterial);
+    addBox(truckShell, [rail, 0.14, l + rail * 1.8], [-sideX, 0.09, 0], frameMaterial);
+    addBox(truckShell, [rail, 0.14, l + rail * 1.8], [sideX, 0.09, 0], frameMaterial);
+    addBox(truckShell, [rail, rail, l + rail * 1.8], [-sideX, h + rail, 0], frameMaterial);
+    addBox(truckShell, [rail, rail, l + rail * 1.8], [sideX, h + rail, 0], frameMaterial);
+    addBox(truckShell, [w + rail * 2.4, rail, rail], [0, h + rail, -l / 2 - rail * 0.45], frameMaterial);
+    addBox(truckShell, [w + rail * 2.4, rail, rail], [0, h + rail, l / 2 + rail * 0.45], frameMaterial);
+
+    const ribCount = Math.max(5, Math.min(18, Math.round(l / 0.7)));
+    for (let index = 0; index < ribCount; index += 1) {
+      const z = -l / 2 + (l * index) / Math.max(1, ribCount - 1);
+      addBox(truckShell, [rail, h + rail * 2, rail], [-sideX, h / 2, z], frameMaterial);
+      addBox(truckShell, [rail, h + rail * 2, rail], [sideX, h / 2, z], frameMaterial);
+    }
+
+    const cabLength = Math.min(2.1, Math.max(1.55, l * 0.32));
+    const cabWidth = Math.min(w + 0.34, 2.75);
+    const cabHeight = Math.min(Math.max(1.85, h * 0.88), 2.75);
+    const cabZ = -l / 2 - cabLength / 2 - 0.18;
+    addBox(truckShell, [cabWidth, cabHeight, cabLength], [0, cabHeight / 2 - 0.02, cabZ], cabMaterial);
+    addBox(truckShell, [cabWidth * 0.72, cabHeight * 0.34, 0.04], [0, cabHeight * 0.68, cabZ - cabLength / 2 - 0.025], glassMaterial);
+    addBox(truckShell, [cabWidth * 0.86, 0.08, 0.06], [0, cabHeight * 0.38, cabZ - cabLength / 2 - 0.05], lightMaterial);
+
+    const wheelMaterial = new THREE.MeshStandardMaterial({ color: '#030712', roughness: 0.5, metalness: 0.2 });
+    const hubMaterial = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.35, metalness: 0.45 });
+    const addWheel = (x: number, z: number, radius = 0.26) => {
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 0.18, 24), wheelMaterial);
+      tire.rotation.z = Math.PI / 2;
+      tire.position.set(x, radius, z);
+      tire.castShadow = true;
+      truckShell.add(tire);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.42, radius * 0.42, 0.19, 20), hubMaterial);
+      hub.rotation.z = Math.PI / 2;
+      hub.position.copy(tire.position);
+      truckShell.add(hub);
+    };
+    const wheelX = sideX + 0.1;
+    [-wheelX, wheelX].forEach((x) => {
+      addWheel(x, cabZ - cabLength * 0.22, 0.27);
+      addWheel(x, cabZ + cabLength * 0.36, 0.27);
+      addWheel(x, l / 2 - 0.62, 0.24);
+      addWheel(x, l / 2 - 0.12, 0.24);
+    });
+    scene.add(truckShell);
 
     const volumeEdges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(volumeMesh.geometry),
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, l)),
       new THREE.LineBasicMaterial({ color: '#059669' })
     );
     volumeEdges.renderOrder = 4;
-    volumeEdges.position.copy(volumeMesh.position);
+    volumeEdges.position.set(0, h / 2, 0);
     scene.add(volumeEdges);
 
     const cargoGroup = new THREE.Group();
@@ -387,52 +447,6 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       scene.add(cog);
     }
 
-    let cancelled = false;
-    const loader = new GLTFLoader();
-    loader.load(
-      EV_TRUCK_GLB_URL,
-      (gltf) => {
-        if (cancelled) return;
-        const model = gltf.scene;
-        model.traverse((object) => {
-          if (object instanceof THREE.Mesh) {
-            object.castShadow = true;
-            object.receiveShadow = true;
-            object.renderOrder = 1;
-            object.material = new THREE.MeshStandardMaterial({
-              color: '#0f8f5f',
-              metalness: 0.55,
-              roughness: 0.38,
-              envMapIntensity: 1.1,
-              transparent: true,
-              opacity: 0.32,
-              side: THREE.DoubleSide,
-              depthWrite: false,
-            });
-          }
-        });
-        const sourceBox = new THREE.Box3().setFromObject(model);
-        const sourceSize = sourceBox.getSize(new THREE.Vector3());
-        const targetLength = container.length / 100 + 2.8;
-        const scale = targetLength / Math.max(sourceSize.y, 0.001);
-        model.rotation.x = Math.PI / 2;
-        model.scale.setScalar(scale);
-        model.updateMatrixWorld(true);
-        const fittedBox = new THREE.Box3().setFromObject(model);
-        const fittedCenter = fittedBox.getCenter(new THREE.Vector3());
-        model.position.set(
-          -fittedCenter.x,
-          -fittedBox.min.y - 0.05,
-          -fittedCenter.z
-        );
-        scene.add(model);
-      },
-      undefined,
-      () => {
-        scene.add(new THREE.AxesHelper(0.1));
-      }
-    );
-
     const syncSize = () => {
       const rect = host.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
@@ -454,7 +468,6 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     render();
 
     return () => {
-      cancelled = true;
       window.clearTimeout(healthTimer);
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
