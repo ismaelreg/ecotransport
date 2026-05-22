@@ -1,7 +1,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid, Text, PerspectiveCamera, Edges, Loader, RoundedBox, useGLTF } from '@react-three/drei';
+import { OrbitControls, Grid, Text, PerspectiveCamera, Edges, RoundedBox, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
@@ -1557,8 +1557,6 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
           position={[0, -0.05, 0]} 
         />
       </Canvas>
-      <Loader />
-      
       {placedItems.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-black/10 backdrop-blur-sm px-6 py-3 rounded-full border border-black/5">
