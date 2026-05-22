@@ -325,6 +325,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const w = container.width / 100;
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
+    const cargoLift = 0.45;
     const truckCutawayPlanes = [
       new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 0.38),
       new THREE.Plane(new THREE.Vector3(1, 0, 0), w / 2 + 0.38),
@@ -335,10 +336,11 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       new THREE.LineBasicMaterial({ color: '#059669' })
     );
     volumeEdges.renderOrder = 4;
-    volumeEdges.position.set(0, h / 2, 0);
+    volumeEdges.position.set(0, h / 2 + cargoLift, 0);
     scene.add(volumeEdges);
 
     const cargoGroup = new THREE.Group();
+    cargoGroup.position.y = cargoLift;
     placedItems.forEach((item) => {
       const itemW = item.width / 100;
       const itemH = item.height / 100;
@@ -387,7 +389,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         new THREE.SphereGeometry(0.15, 16, 16),
         new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#ef4444', emissiveIntensity: 1.6 })
       );
-      cog.position.set((weighted.x - container.width / 2) / 100, weighted.y / 100, (weighted.z - container.length / 2) / 100);
+      cog.position.set((weighted.x - container.width / 2) / 100, weighted.y / 100 + cargoLift, (weighted.z - container.length / 2) / 100);
       scene.add(cog);
     }
 
@@ -470,10 +472,13 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         model.position.set(0, 0, 0);
         model.rotation.copy(bestRotation);
         model.rotateY(Math.PI);
+        model.rotateZ(Math.PI / 2);
+        model.updateMatrixWorld(true);
+        const rotatedSize = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
         model.scale.set(
-          targetWidth / Math.max(bestSize.x, 0.001),
-          targetHeight / Math.max(bestSize.y, 0.001),
-          targetLength / Math.max(bestSize.z, 0.001)
+          targetWidth / Math.max(rotatedSize.x, 0.001),
+          targetHeight / Math.max(rotatedSize.y, 0.001),
+          targetLength / Math.max(rotatedSize.z, 0.001)
         );
         model.updateMatrixWorld(true);
 
