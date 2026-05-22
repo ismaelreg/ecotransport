@@ -325,10 +325,10 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const w = container.width / 100;
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
-    const cargoLift = 0.45;
+    const cargoLift = 0.22;
     const truckCutawayPlanes = [
-      new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 0.38),
-      new THREE.Plane(new THREE.Vector3(1, 0, 0), w / 2 + 0.38),
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 1.25),
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), w / 2 + 1.25),
     ];
 
     const volumeEdges = new THREE.LineSegments(
@@ -356,7 +356,6 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           metalness: 0.05,
           emissive: new THREE.Color(item.color),
           emissiveIntensity: 0.08,
-          depthTest: false,
         })
       );
       box.position.set(xPos, yPos, zPos);
@@ -367,7 +366,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
       const boxEdges = new THREE.LineSegments(
         new THREE.EdgesGeometry(box.geometry),
-        new THREE.LineBasicMaterial({ color: '#111111', depthTest: false })
+        new THREE.LineBasicMaterial({ color: '#111111' })
       );
       boxEdges.position.copy(box.position);
       boxEdges.renderOrder = 4;
@@ -411,14 +410,14 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           const materials = Array.isArray(object.material) ? object.material : [object.material];
           materials.forEach((material) => {
             material.side = THREE.DoubleSide;
+            material.depthTest = true;
             material.depthWrite = true;
+            material.transparent = false;
+            material.opacity = 1;
             material.clippingPlanes = truckCutawayPlanes;
             material.clipShadows = true;
             if ('color' in material && material.color instanceof THREE.Color) {
-              material.color.set('#0f8f5f');
-            }
-            if ('map' in material) {
-              material.map = null;
+              material.color.lerp(new THREE.Color('#0f8f5f'), 0.72);
             }
             if ('emissive' in material && material.emissive instanceof THREE.Color) {
               material.emissive.set('#063f2c');
