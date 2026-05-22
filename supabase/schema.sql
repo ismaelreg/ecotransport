@@ -74,6 +74,39 @@ create table if not exists public.app_state (
   updated_at timestamptz not null default now()
 );
 
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, company)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    coalesce(new.raw_user_meta_data->>'company', 'NEMFIS Green Logistics')
+  )
+  on conflict (id) do update set
+    full_name = excluded.full_name,
+    company = excluded.company,
+    updated_at = now();
+  return new;
+end;
+$$;
+
 alter table public.profiles enable row level security;
 alter table public.cargo_spaces enable row level security;
 alter table public.cargo_items enable row level security;
@@ -113,3 +146,33 @@ create policy "cargo_routes_all_own" on public.cargo_routes
 
 create policy "app_state_all_own" on public.app_state
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop trigger if exists profiles_set_updated_at on public.profiles;
+create trigger profiles_set_updated_at
+  before update on public.profiles
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists cargo_spaces_set_updated_at on public.cargo_spaces;
+create trigger cargo_spaces_set_updated_at
+  before update on public.cargo_spaces
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists cargo_items_set_updated_at on public.cargo_items;
+create trigger cargo_items_set_updated_at
+  before update on public.cargo_items
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists cargo_loads_set_updated_at on public.cargo_loads;
+create trigger cargo_loads_set_updated_at
+  before update on public.cargo_loads
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists cargo_routes_set_updated_at on public.cargo_routes;
+create trigger cargo_routes_set_updated_at
+  before update on public.cargo_routes
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists auth_users_handle_new_user on auth.users;
+create trigger auth_users_handle_new_user
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
