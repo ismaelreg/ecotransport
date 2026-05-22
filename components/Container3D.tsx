@@ -325,7 +325,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const w = container.width / 100;
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
-    const cargoLift = 1.08;
+    const cargoLift = 1.52;
     const truckCutawayPlanes = [
       new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 1.25),
       new THREE.Plane(new THREE.Vector3(1, 0, 0), w / 2 + 1.25),
@@ -342,10 +342,10 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const cargoGroup = new THREE.Group();
     cargoGroup.position.y = cargoLift;
     placedItems.forEach((item) => {
-      const visualGap = 0;
-      const itemW = Math.max(item.width / 100 - visualGap, 0.02);
-      const itemH = Math.max(item.height / 100 - visualGap, 0.02);
-      const itemL = Math.max(item.length / 100 - visualGap, 0.02);
+      const visualFill = 1.006;
+      const itemW = Math.max((item.width / 100) * visualFill, 0.02);
+      const itemH = Math.max((item.height / 100) * visualFill, 0.02);
+      const itemL = Math.max((item.length / 100) * visualFill, 0.02);
       const xPos = (item.position[0] - container.width / 2) / 100;
       const yPos = item.position[1] / 100;
       const zPos = (item.position[2] - container.length / 2) / 100;
