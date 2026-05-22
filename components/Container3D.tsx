@@ -325,7 +325,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const w = container.width / 100;
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
-    const cargoLift = 1.52;
+    const cargoLift = 1.92;
     const truckCutawayPlanes = [
       new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 1.25),
       new THREE.Plane(new THREE.Vector3(1, 0, 0), w / 2 + 1.25),
