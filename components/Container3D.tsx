@@ -342,9 +342,10 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const cargoGroup = new THREE.Group();
     cargoGroup.position.y = cargoLift;
     placedItems.forEach((item) => {
-      const itemW = item.width / 100;
-      const itemH = item.height / 100;
-      const itemL = item.length / 100;
+      const visualGap = 0.025;
+      const itemW = Math.max(item.width / 100 - visualGap, 0.02);
+      const itemH = Math.max(item.height / 100 - visualGap, 0.02);
+      const itemL = Math.max(item.length / 100 - visualGap, 0.02);
       const xPos = (item.position[0] + item.width / 2 - container.width / 2) / 100;
       const yPos = (item.position[1] + item.height / 2) / 100;
       const zPos = (item.position[2] + item.length / 2 - container.length / 2) / 100;
@@ -418,6 +419,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
             material.clipShadows = true;
             if ('color' in material && material.color instanceof THREE.Color) {
               material.color.lerp(new THREE.Color('#0f8f5f'), 0.72);
+              material.color.lerp(new THREE.Color('#ffffff'), 0.1);
             }
             if ('emissive' in material && material.emissive instanceof THREE.Color) {
               material.emissive.set('#063f2c');
