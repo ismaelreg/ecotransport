@@ -329,6 +329,8 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const cargoLift = 1.22;
     const cargoDeckOffsetZ = -1.2;
     const visualLoadWidth = w + 1.35;
+    const visualLoadRearExtension = 1.25;
+    const visualLoadLength = l + visualLoadRearExtension;
     const lateralDisplayScale = visualLoadWidth / Math.max(w, 0.001);
     const truckCutawayPlanes = [
       new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 1.25),
@@ -336,11 +338,11 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     ];
 
     const volumeEdges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(visualLoadWidth, h, l)),
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(visualLoadWidth, h, visualLoadLength)),
       new THREE.LineBasicMaterial({ color: '#059669' })
     );
     volumeEdges.renderOrder = 4;
-    volumeEdges.position.set(0, h / 2 + cargoLift, cargoDeckOffsetZ);
+    volumeEdges.position.set(0, h / 2 + cargoLift, cargoDeckOffsetZ + visualLoadRearExtension / 2);
     scene.add(volumeEdges);
 
     const cargoGroup = new THREE.Group();
