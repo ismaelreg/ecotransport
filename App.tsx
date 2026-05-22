@@ -15,6 +15,7 @@ import { Container3D } from './components/Container3D';
 import { ItemEditor } from './components/ItemEditor';
 import { InitialSetup } from './components/InitialSetup';
 import { RouteSelector } from './components/RouteSelector';
+import { PwaInstallButton } from './components/PwaInstallButton';
 import { getLoadOptimizationAdvice } from './services/geminiService';
 import { isSupabaseConfigured, supabase } from './services/supabaseClient';
 
@@ -1139,6 +1140,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-[#dfe8df] text-gray-700 select-none overflow-hidden">
+      <PwaInstallButton />
       {showSetup && (
         <InitialSetup 
           brand={APP_BRAND}

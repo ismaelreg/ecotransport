@@ -1,6 +1,7 @@
 <IfModule mod_mime.c>
   AddType application/wasm .wasm
   AddType model/gltf-binary .glb
+  AddType application/manifest+json .webmanifest
 </IfModule>
 
 <IfModule mod_rewrite.c>

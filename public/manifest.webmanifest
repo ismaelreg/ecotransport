@@ -1,0 +1,20 @@
+{
+  "name": "EcoTransport",
+  "short_name": "EcoTransport",
+  "description": "Cubicaje 3D sustentable para reducir viajes, combustible y emisiones.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#d6d6d6",
+  "theme_color": "#0f8f5f",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
