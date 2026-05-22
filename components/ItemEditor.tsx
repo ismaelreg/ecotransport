@@ -60,7 +60,14 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({ item, onUpdate, onRemove
             
             <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm h-12">
                <div className="px-5 py-1 text-[13px] font-black text-gray-800 flex flex-col items-center justify-center min-w-[60px]">
-                  <span>{item.quantity}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(event) => onUpdate('quantity', Math.max(1, Math.floor(Number(event.target.value) || 1)))}
+                    className="w-12 bg-transparent text-center text-[13px] font-black text-gray-800 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    aria-label="Cantidad de piezas"
+                  />
                   <span className="text-[8px] uppercase text-gray-400 font-bold tracking-widest">PIEZAS</span>
                </div>
                <div className="flex flex-col border-l border-gray-100 h-full">
