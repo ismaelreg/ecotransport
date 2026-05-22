@@ -325,7 +325,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const w = container.width / 100;
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
-    const cargoLift = 1.92;
+    const cargoLift = 2.35;
     const truckCutawayPlanes = [
       new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 1.25),
       new THREE.Plane(new THREE.Vector3(1, 0, 0), w / 2 + 1.25),
@@ -365,13 +365,6 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       box.renderOrder = 3;
       cargoGroup.add(box);
 
-      const boxEdges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(box.geometry),
-        new THREE.LineBasicMaterial({ color: '#111111' })
-      );
-      boxEdges.position.copy(box.position);
-      boxEdges.renderOrder = 4;
-      cargoGroup.add(boxEdges);
     });
     scene.add(cargoGroup);
 
