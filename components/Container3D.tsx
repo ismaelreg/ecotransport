@@ -469,6 +469,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
         model.position.set(0, 0, 0);
         model.rotation.copy(bestRotation);
+        model.rotateY(Math.PI);
         model.scale.set(
           targetWidth / Math.max(bestSize.x, 0.001),
           targetHeight / Math.max(bestSize.y, 0.001),
