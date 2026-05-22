@@ -438,8 +438,8 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
         const cabAllowance = Math.min(7.2, Math.max(4.5, l * 0.46));
         const targetLength = l + cabAllowance;
-        const targetWidth = w + 2.2;
-        const targetHeight = h + 1.45;
+        const targetWidth = w + 0.42;
+        const targetHeight = h + 0.62;
 
         const rotationCandidates = [
           new THREE.Euler(0, 0, 0),
