@@ -8,8 +8,9 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Container, PlacedItem } from '../types';
 
-const EV_TRUCK_GLB_URL = '/models/ev-truck-original.glb';
-const DRACO_DECODER_PATH = '/draco/';
+const assetBaseUrl = import.meta.env.BASE_URL || './';
+const EV_TRUCK_GLB_URL = `${assetBaseUrl}models/ev-truck-original.glb`;
+const DRACO_DECODER_PATH = `${assetBaseUrl}draco/`;
 const USE_GLB_TRUCK = true;
 
 // Opción A: Modelo Proxy Ligero (Optimizado para web)
