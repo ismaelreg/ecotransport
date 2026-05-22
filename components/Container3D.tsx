@@ -342,13 +342,13 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const cargoGroup = new THREE.Group();
     cargoGroup.position.y = cargoLift;
     placedItems.forEach((item) => {
-      const visualGap = 0.04;
+      const visualGap = 0.08;
       const itemW = Math.max(item.width / 100 - visualGap, 0.02);
       const itemH = Math.max(item.height / 100 - visualGap, 0.02);
       const itemL = Math.max(item.length / 100 - visualGap, 0.02);
-      const xPos = (item.position[0] + item.width / 2 - container.width / 2) / 100;
-      const yPos = (item.position[1] + item.height / 2) / 100;
-      const zPos = (item.position[2] + item.length / 2 - container.length / 2) / 100;
+      const xPos = (item.position[0] - container.width / 2) / 100;
+      const yPos = item.position[1] / 100;
+      const zPos = (item.position[2] - container.length / 2) / 100;
       const box = new THREE.Mesh(
         new THREE.BoxGeometry(itemW, itemH, itemL),
         new THREE.MeshStandardMaterial({
@@ -380,9 +380,9 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       const weighted = new THREE.Vector3();
       placedItems.forEach((item) => {
         totalWeight += item.weight;
-        weighted.x += (item.position[0] + item.width / 2) * item.weight;
-        weighted.y += (item.position[1] + item.height / 2) * item.weight;
-        weighted.z += (item.position[2] + item.length / 2) * item.weight;
+        weighted.x += item.position[0] * item.weight;
+        weighted.y += item.position[1] * item.weight;
+        weighted.z += item.position[2] * item.weight;
       });
       weighted.divideScalar(totalWeight);
       const cog = new THREE.Mesh(

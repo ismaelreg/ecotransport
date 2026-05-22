@@ -527,9 +527,10 @@ const App: React.FC = () => {
     if (!saved) return CONTAINERS;
 
     const savedContainers = JSON.parse(saved) as Container[];
+    const savedById = new Map(savedContainers.map((container) => [container.id, container]));
     const defaultIds = new Set(CONTAINERS.map((container) => container.id));
     const customContainers = savedContainers.filter((container) => !defaultIds.has(container.id));
-    return [...CONTAINERS, ...customContainers];
+    return [...CONTAINERS.map((container) => savedById.get(container.id) || container), ...customContainers];
   });
 
   const [selectedContainer, setSelectedContainer] = useState<Container>(
@@ -747,6 +748,13 @@ const App: React.FC = () => {
     setSelectedContainer(newContainer);
     setActiveView('simulador');
   }, [customSpace]);
+
+  const updateSelectedContainer = useCallback((field: keyof Pick<Container, 'length' | 'width' | 'height' | 'maxWeight'>, value: number) => {
+    const safeValue = Math.max(1, Number(value) || 1);
+    const updatedContainer = { ...selectedContainer, [field]: safeValue };
+    setSelectedContainer(updatedContainer);
+    setContainerList(prev => prev.map(container => container.id === selectedContainer.id ? updatedContainer : container));
+  }, [selectedContainer]);
 
   // Sincronización automática de la carga
   useEffect(() => {
@@ -1617,23 +1625,54 @@ const App: React.FC = () => {
                   </button>
                   
                   {showUtils && (
-                    <div className="bg-white/90 rounded-full shadow-lg p-1.5 flex gap-2 border border-white animate-in fade-in slide-in-from-left-2 duration-200">
-                      <button
-                        onClick={() => setCameraView(cameraView === 'front' ? 'iso' : 'front')}
-                        className={`p-2.5 hover:bg-gray-100 rounded-full transition-colors ${cameraView === 'front' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500'}`}
-                        title="Camara Frontal"
-                      >
-                        <Camera className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setShowSidebar(!showSidebar)}
-                        className={`p-2.5 hover:bg-gray-100 rounded-full transition-colors ${!showSidebar ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500'}`}
-                        title="Maximizar"
-                      >
-                        <Maximize2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={requestAiAdvice} className="p-2.5 hover:bg-blue-50 rounded-full text-blue-600 transition-colors" title="Asistente AI"><Sparkles className="w-4 h-4" /></button>
-                    </div>
+                    <>
+                      <div className="bg-white/90 rounded-full shadow-lg p-1.5 flex gap-2 border border-white animate-in fade-in slide-in-from-left-2 duration-200">
+                        <button
+                          onClick={() => setCameraView(cameraView === 'front' ? 'iso' : 'front')}
+                          className={`p-2.5 hover:bg-gray-100 rounded-full transition-colors ${cameraView === 'front' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500'}`}
+                          title="Camara Frontal"
+                        >
+                          <Camera className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setShowSidebar(!showSidebar)}
+                          className={`p-2.5 hover:bg-gray-100 rounded-full transition-colors ${!showSidebar ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500'}`}
+                          title="Maximizar"
+                        >
+                          <Maximize2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={requestAiAdvice} className="p-2.5 hover:bg-blue-50 rounded-full text-blue-600 transition-colors" title="Asistente AI"><Sparkles className="w-4 h-4" /></button>
+                      </div>
+
+                      <div className="absolute top-14 left-0 z-50 w-72 bg-white/95 backdrop-blur-md border border-white shadow-2xl rounded-2xl p-4 animate-in fade-in slide-in-from-left-2 duration-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="text-[9px] font-black uppercase tracking-[0.16em] text-emerald-600">Caja del camion</div>
+                            <div className="text-[11px] font-black text-gray-800 truncate">{selectedContainer.name}</div>
+                          </div>
+                          <Truck className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            ['length', 'Largo cm'],
+                            ['width', 'Ancho cm'],
+                            ['height', 'Alto cm'],
+                            ['maxWeight', 'Peso kg'],
+                          ].map(([field, label]) => (
+                            <label key={field} className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+                              {label}
+                              <input
+                                type="number"
+                                min="1"
+                                value={selectedContainer[field as keyof Pick<Container, 'length' | 'width' | 'height' | 'maxWeight'>]}
+                                onChange={(event) => updateSelectedContainer(field as keyof Pick<Container, 'length' | 'width' | 'height' | 'maxWeight'>, Number(event.target.value))}
+                                className="mt-1 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] font-bold text-gray-700 outline-none focus:border-emerald-500"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
 
