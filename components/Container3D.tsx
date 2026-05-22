@@ -365,6 +365,13 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       box.renderOrder = 3;
       cargoGroup.add(box);
 
+      const boxEdges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(box.geometry),
+        new THREE.LineBasicMaterial({ color: '#2a1f12', transparent: true, opacity: 0.38 })
+      );
+      boxEdges.position.copy(box.position);
+      boxEdges.renderOrder = 4;
+      cargoGroup.add(boxEdges);
     });
     scene.add(cargoGroup);
 
