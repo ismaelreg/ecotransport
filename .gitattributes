@@ -1,1 +1,1 @@
-public/models/*.glb filter=lfs diff=lfs merge=lfs -text
+public/models/ev-truck.glb filter=lfs diff=lfs merge=lfs -text
