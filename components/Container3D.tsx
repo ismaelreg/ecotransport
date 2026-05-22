@@ -419,12 +419,12 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
             material.clippingPlanes = truckCutawayPlanes;
             material.clipShadows = true;
             if ('color' in material && material.color instanceof THREE.Color) {
-              material.color.lerp(new THREE.Color('#34d399'), 0.82);
-              material.color.lerp(new THREE.Color('#ffffff'), 0.75);
+              material.color.lerp(new THREE.Color('#22d3ee'), 0.86);
+              material.color.lerp(new THREE.Color('#ffffff'), 0.68);
             }
             if ('emissive' in material && material.emissive instanceof THREE.Color) {
-              material.emissive.set('#34d399');
-              material.emissiveIntensity = 0.08;
+              material.emissive.set('#14b8a6');
+              material.emissiveIntensity = 0.07;
             }
             if ('metalness' in material && typeof material.metalness === 'number') {
               material.metalness = Math.max(material.metalness, 0.34);
