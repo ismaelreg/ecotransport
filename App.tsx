@@ -6,7 +6,7 @@ import {
   Loader2, Filter, Camera, Maximize2, Box, Video, LogOut, ShoppingCart,
   PlusSquare, Edit, CreditCard, BookOpen, CheckCircle2, AlertCircle, Search,
   Printer, ClipboardList, Info, ChevronRight, MessageSquare, Leaf, Wind, Zap,
-  Globe, BarChart3, Navigation, ArrowDownUp, AlertTriangle, Move
+  Globe, BarChart3, Navigation, ArrowDownUp, AlertTriangle
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { Container, CargoItem, PlacedItem, CONTAINERS, Route } from './types';
@@ -20,24 +20,11 @@ import { getLoadOptimizationAdvice } from './services/geminiService';
 import { isSupabaseConfigured, supabase } from './services/supabaseClient';
 
 type ViewType = 'simulador' | 'cargas' | 'items' | 'espacio' | 'usuarios' | 'licencias';
-type FloatingPanelKey = 'sustainability' | 'capacity';
 type OverflowRecommendation = {
   status: 'fits' | 'partial';
   container: Container;
   placedCount: number;
   unplacedCount: number;
-};
-
-const defaultFloatingPanels = () => {
-  const width = typeof window !== 'undefined' ? window.innerWidth : 1280;
-  const height = typeof window !== 'undefined' ? window.innerHeight : 800;
-  const clampPanel = (value: number, panelWidth: number) => Math.max(12, Math.min(value, width - panelWidth - 12));
-  const clampPanelY = (value: number, panelHeight: number) => Math.max(12, Math.min(value, height - panelHeight - 12));
-
-  return {
-    sustainability: { x: clampPanel(width - 360, 320), y: 24 },
-    capacity: { x: clampPanel(width / 2 - 200, 400), y: clampPanelY(height - 170, 150) }
-  };
 };
 
 const APP_BRAND = 'EcoTransport';
@@ -489,7 +476,6 @@ const App: React.FC = () => {
   const [showMetrics, setShowMetrics] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [cameraView, setCameraView] = useState<'iso' | 'front'>('iso');
-  const [floatingPanels, setFloatingPanels] = useState(defaultFloatingPanels);
   const [customSpace, setCustomSpace] = useState({
     name: 'Unidad sustentable personalizada',
     length: 1200,
@@ -520,6 +506,7 @@ const App: React.FC = () => {
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [capacityError, setCapacityError] = useState<string | null>(null);
+  const [showSustainabilityDrawer, setShowSustainabilityDrawer] = useState(false);
   const [showCapacitySummary, setShowCapacitySummary] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'weight' | 'volume'>('name');
 
@@ -597,33 +584,6 @@ const App: React.FC = () => {
       unplacedCount: bestPartial.result.unplacedCount,
     };
   }, [containerList, loadingMode, packingResult, selectedContainer.id]);
-
-  const startPanelDrag = useCallback((panel: FloatingPanelKey, event: React.MouseEvent) => {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startPosition = floatingPanels[panel];
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const maxX = Math.max(0, window.innerWidth - (panel === 'sustainability' ? 340 : 420));
-      const maxY = Math.max(0, window.innerHeight - 120);
-      const nextX = Math.min(maxX, Math.max(8, startPosition.x + moveEvent.clientX - startX));
-      const nextY = Math.min(maxY, Math.max(8, startPosition.y + moveEvent.clientY - startY));
-
-      setFloatingPanels(prev => ({
-        ...prev,
-        [panel]: { x: nextX, y: nextY }
-      }));
-    };
-
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }, [floatingPanels]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -1338,14 +1298,11 @@ const App: React.FC = () => {
                 />
               </div>
 
-              <div
-                className="absolute z-20 w-[320px] bg-emerald-950/90 text-white rounded-2xl shadow-2xl border border-emerald-400/30 p-4 backdrop-blur-md"
-                style={{ left: floatingPanels.sustainability.x, top: floatingPanels.sustainability.y }}
-              >
-                <div
-                  onMouseDown={(event) => startPanelDrag('sustainability', event)}
-                  className="flex items-center justify-between gap-2 mb-3 cursor-move select-none"
-                  title="Arrastrar panel"
+              <div className="absolute z-30 right-3 bottom-24 sm:right-6 sm:bottom-6 w-[min(360px,calc(100vw-24px))] bg-emerald-950/92 text-white rounded-2xl shadow-2xl border border-emerald-400/30 backdrop-blur-md overflow-hidden">
+                <button
+                  onClick={() => setShowSustainabilityDrawer(!showSustainabilityDrawer)}
+                  className="w-full flex items-center justify-between gap-2 p-4 select-none hover:bg-white/5 transition-colors"
+                  title="Mostrar informacion sustentable"
                 >
                   <div className="flex items-center gap-2">
                     <Leaf className="w-5 h-5 text-emerald-300" />
@@ -1353,54 +1310,53 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[8px] font-black uppercase tracking-widest text-emerald-300">{APP_BADGE}</span>
-                    <Move className="w-3.5 h-3.5 text-emerald-300" />
+                    <ChevronRight className={`w-4 h-4 text-emerald-300 transition-transform ${showSustainabilityDrawer ? '-rotate-90' : 'rotate-90'}`} />
                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <div className="text-2xl font-black">{metrics.tripsAvoided}</div>
-                    <div className="text-[9px] uppercase tracking-widest text-emerald-200">viajes evitados</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-black">{metrics.fuelAvoided.toFixed(1)}</div>
-                    <div className="text-[9px] uppercase tracking-widest text-emerald-200">L diesel</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-black">{metrics.sustainability.co2Avoided.toFixed(1)}</div>
-                    <div className="text-[9px] uppercase tracking-widest text-emerald-200">kg CO2</div>
-                  </div>
-                </div>
-                <div className="mt-3 rounded-xl bg-white/10 border border-emerald-400/20 px-3 py-2">
-                  <div className="text-[9px] font-black uppercase tracking-widest text-emerald-200">Algoritmo de cubicaje</div>
-                  <div className="text-xs font-black text-white">EP-BFD: Extreme Point Best-Fit Decreasing</div>
-                </div>
-                <div className="mt-3 border-t border-emerald-700/60 pt-3 grid grid-cols-2 gap-3 text-[10px] text-emerald-100">
-                  <div>
-                    <span className="block font-black text-white">24%</span>
-                    <span className="uppercase tracking-widest">transporte de aire objetivo</span>
-                  </div>
-                  <div>
-                    <span className="block font-black text-white">NOM-012 / ISO 14001</span>
-                    <span className="uppercase tracking-widest">base normativa</span>
+                </button>
+                <div className={`transition-all duration-300 overflow-hidden ${showSustainabilityDrawer ? 'max-h-[340px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                  <div className="px-4 pb-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <div className="text-2xl font-black">{metrics.tripsAvoided}</div>
+                        <div className="text-[9px] uppercase tracking-widest text-emerald-200">viajes evitados</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black">{metrics.fuelAvoided.toFixed(1)}</div>
+                        <div className="text-[9px] uppercase tracking-widest text-emerald-200">L diesel</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black">{metrics.sustainability.co2Avoided.toFixed(1)}</div>
+                        <div className="text-[9px] uppercase tracking-widest text-emerald-200">kg CO2</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-xl bg-white/10 border border-emerald-400/20 px-3 py-2">
+                      <div className="text-[9px] font-black uppercase tracking-widest text-emerald-200">Algoritmo de cubicaje</div>
+                      <div className="text-xs font-black text-white">EP-BFD: Extreme Point Best-Fit Decreasing</div>
+                    </div>
+                    <div className="mt-3 border-t border-emerald-700/60 pt-3 grid grid-cols-2 gap-3 text-[10px] text-emerald-100">
+                      <div>
+                        <span className="block font-black text-white">24%</span>
+                        <span className="uppercase tracking-widest">transporte de aire objetivo</span>
+                      </div>
+                      <div>
+                        <span className="block font-black text-white">NOM-012 / ISO 14001</span>
+                        <span className="uppercase tracking-widest">base normativa</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Floating Capacity Summary Bar */}
               <div
-                className={`absolute z-30 transition-all duration-500 ease-in-out ${showCapacitySummary ? 'w-[400px]' : 'w-[280px]'}`}
-                style={{ left: floatingPanels.capacity.x, top: floatingPanels.capacity.y }}
+                className={`absolute z-30 left-3 bottom-3 sm:left-1/2 sm:-translate-x-1/2 transition-all duration-500 ease-in-out ${showCapacitySummary ? 'w-[min(400px,calc(100vw-24px))]' : 'w-[min(260px,calc(100vw-24px))]'}`}
               >
                 <div className="bg-white/95 backdrop-blur-md border border-white shadow-2xl rounded-2xl overflow-hidden">
                   {/* Header / Toggle Button */}
                   <div className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                    <button
-                      onMouseDown={(event) => startPanelDrag('capacity', event)}
-                      className="p-1 -ml-1 text-gray-400 hover:text-gray-700 cursor-move"
-                      title="Arrastrar resumen"
-                    >
-                      <Move className="w-4 h-4" />
-                    </button>
+                    <div className="p-1 -ml-1 text-gray-300">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
                     <div className="flex items-center gap-2">
                       <div className={`p-1.5 rounded-lg ${metrics.totalInventoryWeight > selectedContainer.maxWeight ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
                         <BarChart3 className="w-4 h-4" />
