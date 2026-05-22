@@ -327,6 +327,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     const h = (container.height || 240) / 100;
     const l = container.length / 100;
     const cargoLift = 1.22;
+    const cargoDeckOffsetZ = -1.2;
     const truckCutawayPlanes = [
       new THREE.Plane(new THREE.Vector3(-1, 0, 0), w / 2 + 1.25),
       new THREE.Plane(new THREE.Vector3(1, 0, 0), w / 2 + 1.25),
@@ -337,11 +338,11 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       new THREE.LineBasicMaterial({ color: '#059669' })
     );
     volumeEdges.renderOrder = 4;
-    volumeEdges.position.set(0, h / 2 + cargoLift, 0);
+    volumeEdges.position.set(0, h / 2 + cargoLift, cargoDeckOffsetZ);
     scene.add(volumeEdges);
 
     const cargoGroup = new THREE.Group();
-    cargoGroup.position.y = cargoLift;
+    cargoGroup.position.set(0, cargoLift, cargoDeckOffsetZ);
     placedItems.forEach((item) => {
       const visualFill = 1.006;
       const itemW = Math.max((item.width / 100) * visualFill, 0.02);
@@ -390,7 +391,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         new THREE.SphereGeometry(0.15, 16, 16),
         new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#ef4444', emissiveIntensity: 1.6 })
       );
-      cog.position.set((weighted.x - container.width / 2) / 100, weighted.y / 100 + cargoLift, (weighted.z - container.length / 2) / 100);
+      cog.position.set((weighted.x - container.width / 2) / 100, weighted.y / 100 + cargoLift, (weighted.z - container.length / 2) / 100 + cargoDeckOffsetZ);
       scene.add(cog);
     }
 
@@ -438,8 +439,8 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
         const cabAllowance = Math.min(7.2, Math.max(4.5, l * 0.46));
         const targetLength = l + cabAllowance;
-        const targetWidth = w + 0.42;
-        const targetHeight = h + 0.62;
+        const targetWidth = w + 2.2;
+        const targetHeight = h + 1.45;
 
         const rotationCandidates = [
           new THREE.Euler(0, 0, 0),
@@ -502,7 +503,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
           console.info('[ecotransport] GLB cargado', modelMeta.name, modelMeta.box.getSize(new THREE.Vector3()).toArray());
         }
 
-        cargoGroup.position.z = -0.02;
+        cargoGroup.position.z = cargoDeckOffsetZ - 0.02;
         cargoGroup.traverse((object) => {
           if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
             object.renderOrder = Math.max(object.renderOrder, 5);
