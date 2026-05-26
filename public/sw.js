@@ -1,8 +1,11 @@
-const CACHE_NAME = 'ecotransport-shell-v1';
+const CACHE_NAME = 'ecotransport-shell-v2';
 const APP_SHELL = [
   './',
   './manifest.webmanifest',
-  './icons/icon.svg'
+  './icons/eco-transport-logo.jpeg',
+  './icons/eco-transport-icon-192.png',
+  './icons/eco-transport-icon-512.png',
+  './icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {

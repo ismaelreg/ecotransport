@@ -35,6 +35,7 @@ const CURRENT_USER = {
   email: 'ireyes@NEMFIS.MX'
 };
 const AUTH_PASSWORD = '3.1416';
+const APP_LOGO = `${import.meta.env.BASE_URL || './'}icons/eco-transport-logo.jpeg`;
 
 const DEFAULT_ITEMS: CargoItem[] = [
   { id: 'A', name: 'Item A', length: 120, width: 80, height: 100, weight: 25, quantity: 15, color: '#f87171', stackable: true, tiltable: false },
@@ -101,9 +102,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSignup }) => {
       <div className="w-full max-w-md bg-white text-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-emerald-200">
         <div className="bg-emerald-900 text-white p-8">
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-12 h-12 rounded-xl bg-emerald-500 flex items-center justify-center">
-              <Leaf className="w-7 h-7" />
-            </div>
+            <img src={APP_LOGO} alt={`${APP_BRAND} logo`} className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-200 shadow-lg" />
             <div>
               <h1 className="text-2xl font-black uppercase italic tracking-tighter">{APP_BRAND}</h1>
               <p className="text-[10px] uppercase tracking-widest text-emerald-200">{APP_TAGLINE}</p>
@@ -202,9 +201,12 @@ const MerchandiseTicket: React.FC<MerchandiseTicketProps> = ({
       
       <div className="flex-1 overflow-y-auto p-8 bg-[#fafafa]">
         <div className="flex justify-between items-start border-b-2 border-gray-100 pb-8 mb-8">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-black text-gray-800 italic uppercase">{APP_BRAND}</h1>
-            <p className="text-[10px] font-bold text-emerald-600 tracking-widest uppercase">{APP_TAGLINE}</p>
+          <div className="flex items-center gap-4">
+            <img src={APP_LOGO} alt={`${APP_BRAND} logo`} className="w-20 h-20 rounded-2xl object-cover border border-emerald-100 shadow-md" />
+            <div className="space-y-1">
+              <h1 className="text-3xl font-black text-gray-800 italic uppercase">{APP_BRAND}</h1>
+              <p className="text-[10px] font-bold text-emerald-600 tracking-widest uppercase">{APP_TAGLINE}</p>
+            </div>
           </div>
           <div className="text-right">
             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Fecha de Emisión</div>
@@ -1322,6 +1324,9 @@ const App: React.FC = () => {
       )}
 
       <header className="h-11 bg-emerald-950 border-b border-emerald-800 flex items-center px-0 z-30 shadow-sm">
+        <div className="h-full px-3 flex items-center gap-2 border-r border-emerald-800 bg-emerald-950">
+          <img src={APP_LOGO} alt={`${APP_BRAND} logo`} className="w-7 h-7 rounded-lg object-cover border border-emerald-500/40" />
+        </div>
         <div className="flex h-full">
           {[
             { id: 'simulador', label: APP_BRAND },
