@@ -10,7 +10,26 @@ export const getLoadOptimizationAdvice = async (
 ): Promise<string> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    return "Configura GEMINI_API_KEY en .env.local para activar el asistente de IA. Mientras tanto, revisa manualmente la distribución de peso, el volumen ocupado y los límites de apilado.";
+    const totalWeight = placedItems.reduce((acc, item) => acc + item.weight, 0);
+    const placedVolume = placedItems.reduce((acc, item) => acc + item.length * item.width * item.height, 0) / 1000000;
+    const containerVolume = (container.length * container.width * (container.height || 240)) / 1000000;
+    const utilization = containerVolume > 0 ? (placedVolume / containerVolume) * 100 : 0;
+    const weightUse = container.maxWeight > 0 ? (totalWeight / container.maxWeight) * 100 : 0;
+
+    return [
+      "Asistente logistico local activado.",
+      "",
+      `Uso de volumen: ${utilization.toFixed(1)}%. ${utilization < 70 ? "Hay oportunidad de consolidar mas carga o usar una unidad menor." : "La ocupacion es aceptable para reducir aire transportado."}`,
+      `Uso de peso: ${weightUse.toFixed(1)}%. ${weightUse > 95 ? "Revise margen legal de peso antes de salida." : "El peso se mantiene dentro de margen operativo."}`,
+      `Cajas posicionadas: ${placedItems.length} de ${items.reduce((acc, item) => acc + item.quantity, 0)}.`,
+      "",
+      "Acciones recomendadas:",
+      "1. Priorizar cajas pesadas en la base y cerca del centro longitudinal.",
+      "2. Evitar huecos laterales grandes porque aumentan viajes y consumo de combustible.",
+      "3. Si queda sobrante, seleccionar una unidad menor para el remanente antes de programar otro camion grande.",
+      "",
+      "Base sustentable: EP-BFD reduce aire transportado y ayuda a disminuir combustible fosil por envio."
+    ].join("\n");
   }
 
   // Always use a named parameter for apiKey and direct access to process.env.API_KEY

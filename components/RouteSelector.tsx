@@ -36,6 +36,7 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
   const [selecting, setSelecting] = useState<'origin' | 'destination' | null>(null);
   const [originInput, setOriginInput] = useState(route.origin?.address || '');
   const [destInput, setDestInput] = useState(route.destination?.address || '');
+  const [manualDistance, setManualDistance] = useState(route.distanceKm ? String(route.distanceKm) : '');
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
 
   const originAutocompleteRef = React.useRef<google.maps.places.Autocomplete | null>(null);
@@ -47,7 +48,12 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
   }, [route.origin, route.destination]);
 
   const geocodeAddress = (address: string, type: 'origin' | 'destination') => {
-    if (!isLoaded || !address.trim()) return;
+    if (!address.trim()) return;
+    if (!isLoaded) {
+      const manualLocation = { lat: 0, lng: 0, address: address.trim() };
+      onUpdate(type === 'origin' ? { ...route, origin: manualLocation } : { ...route, destination: manualLocation });
+      return;
+    }
 
     const geocoder = new google.maps.Geocoder();
     geocoder.geocode({ address }, (results, status) => {
@@ -72,7 +78,8 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
           map.setZoom(12);
         }
       } else {
-        alert('No se pudo encontrar la ubicación: ' + address);
+        const manualLocation = { lat: 0, lng: 0, address: address.trim() };
+        onUpdate(type === 'origin' ? { ...route, origin: manualLocation } : { ...route, destination: manualLocation });
       }
     });
   };
@@ -114,7 +121,7 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
   };
 
   useEffect(() => {
-    if (isLoaded && route.origin && route.destination) {
+    if (isLoaded && route.origin && route.destination && route.origin.lat !== 0 && route.destination.lat !== 0) {
       const directionsService = new google.maps.DirectionsService();
       directionsService.route(
         {
@@ -142,6 +149,12 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
       setDirections(null);
     }
   }, [isLoaded, route.origin, route.destination]);
+
+  const updateManualDistance = (value: string) => {
+    setManualDistance(value);
+    const distance = Number(value);
+    onUpdate({ ...route, distanceKm: Number.isFinite(distance) && distance > 0 ? distance : 0 });
+  };
 
   return (
     <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -197,9 +210,11 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
                     ) : (
                       <input 
                         type="text"
-                        disabled
-                        placeholder="Cargando..."
-                        className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 text-xs font-bold"
+                        value={originInput}
+                        onChange={(e) => setOriginInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && geocodeAddress(originInput, 'origin')}
+                        placeholder="Escriba la direccion de salida..."
+                        className="w-full p-3 pr-10 rounded-xl border border-gray-200 bg-white text-xs font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                       />
                     )}
                     <button 
@@ -260,9 +275,11 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
                     ) : (
                       <input 
                         type="text"
-                        disabled
-                        placeholder="Cargando..."
-                        className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 text-xs font-bold"
+                        value={destInput}
+                        onChange={(e) => setDestInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && geocodeAddress(destInput, 'destination')}
+                        placeholder="Escriba la direccion de destino..."
+                        className="w-full p-3 pr-10 rounded-xl border border-gray-200 bg-white text-xs font-bold focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all"
                       />
                     )}
                     <button 
@@ -292,6 +309,18 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
                 </div>
               )}
 
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Distancia manual (km)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={manualDistance}
+                  onChange={(e) => updateManualDistance(e.target.value)}
+                  placeholder="Ej: 125"
+                  className="w-full p-3 rounded-xl border border-gray-200 bg-white text-xs font-bold focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
+                />
+              </div>
+
               <div className="p-4 bg-white border border-gray-200 rounded-xl space-y-3">
                 <div className="flex items-center gap-2 text-gray-400">
                   <Info className="w-4 h-4" />
@@ -317,23 +346,13 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
             {!apiKey ? (
               <div className="w-full h-full bg-gray-100 flex items-center justify-center p-12">
                 <div className="max-w-md text-center space-y-4">
-                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto">
-                    <AlertCircle className="w-8 h-8 text-orange-600" />
+                  <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+                    <MapIcon className="w-8 h-8 text-emerald-600" />
                   </div>
-                  <h4 className="text-lg font-black text-gray-800 uppercase tracking-tighter italic">API Key de Google Maps no configurada</h4>
+                  <h4 className="text-lg font-black text-gray-800 uppercase tracking-tighter italic">Ruta manual activa</h4>
                   <p className="text-xs text-gray-500 font-medium leading-relaxed">
-                    Para visualizar el mapa, calcular rutas reales y estimar el impacto ambiental, debe configurar su <span className="font-bold text-gray-700">VITE_GOOGLE_MAPS_API_KEY</span> en las variables de entorno del proyecto.
+                    Puede escribir origen, destino y distancia sin seleccionar puntos en el mapa. Si configura <span className="font-bold text-gray-700">VITE_GOOGLE_MAPS_API_KEY</span>, se activara el mapa y el calculo automatico.
                   </p>
-                  <div className="pt-4">
-                    <a 
-                      href="https://console.cloud.google.com/apis/credentials" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-6 py-2 bg-gray-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
-                    >
-                      Obtener API Key <Navigation className="w-3 h-3" />
-                    </a>
-                  </div>
                 </div>
               </div>
             ) : loadError ? (

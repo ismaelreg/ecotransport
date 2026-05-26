@@ -6,7 +6,7 @@ import {
   Loader2, Filter, Camera, Maximize2, Box, Video, LogOut, ShoppingCart,
   PlusSquare, Edit, CreditCard, BookOpen, CheckCircle2, AlertCircle, Search,
   Printer, ClipboardList, Info, ChevronRight, MessageSquare, Leaf, Wind, Zap,
-  Globe, BarChart3, Navigation, ArrowDownUp, AlertTriangle
+  Globe, BarChart3, Navigation, AlertTriangle
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { Container, CargoItem, PlacedItem, CONTAINERS, Route } from './types';
@@ -495,7 +495,6 @@ const App: React.FC = () => {
     formaPago: 'Efectivo'
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [loadingMode, setLoadingMode] = useState<'FIFO' | 'LIFO'>('FIFO');
   
   const [route, setRoute] = useState<Route>(() => {
     const saved = localStorage.getItem('cargo_route');
@@ -539,8 +538,8 @@ const App: React.FC = () => {
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
 
   const packingResult = useMemo(
-    () => packItemsDetailed(selectedContainer, items, loadingMode),
-    [selectedContainer, items, loadingMode]
+    () => packItemsDetailed(selectedContainer, items),
+    [selectedContainer, items]
   );
 
   const overflowRecommendation = useMemo<OverflowRecommendation | null>(() => {
@@ -550,7 +549,7 @@ const App: React.FC = () => {
       .filter((container) => container.id !== selectedContainer.id)
       .filter((container) => container.type !== 'pallet')
       .map((container) => {
-        const result = packItemsDetailed(container, packingResult.unplacedItems, loadingMode);
+        const result = packItemsDetailed(container, packingResult.unplacedItems);
         return {
           container,
           result,
@@ -583,7 +582,7 @@ const App: React.FC = () => {
       placedCount: packingResult.unplacedCount - bestPartial.result.unplacedCount,
       unplacedCount: bestPartial.result.unplacedCount,
     };
-  }, [containerList, loadingMode, packingResult, selectedContainer.id]);
+  }, [containerList, packingResult, selectedContainer.id]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -890,6 +889,20 @@ const App: React.FC = () => {
     setCargasHistory(prev => [newRecord, ...prev]);
   }, [selectedContainer, packingResult.placedItems]);
 
+  const handlePackAndReport = useCallback(() => {
+    handlePack();
+    setShowTicket(true);
+  }, [handlePack]);
+
+  useEffect(() => {
+    if (!route.destination?.address) return;
+    setReportData(prev => (
+      prev.direccion === route.destination?.address
+        ? prev
+        : { ...prev, direccion: route.destination?.address || prev.direccion }
+    ));
+  }, [route.destination?.address]);
+
   const requestAiAdvice = async () => {
     setIsAiLoading(true);
     setShowAiPanel(true);
@@ -905,6 +918,107 @@ const App: React.FC = () => {
 
   const exportToPdf = () => {
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 16;
+    let y = 18;
+    const line = (label: string, value: string, x: number, width: number) => {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(85, 85, 85);
+      doc.text(label.toUpperCase(), x, y);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(20, 20, 20);
+      doc.text(doc.splitTextToSize(value || "-", width), x, y + 5);
+    };
+
+    doc.setFillColor(6, 78, 59);
+    doc.rect(0, 0, pageWidth, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("MANIFIESTO SUSTENTABLE DE CARGA", margin, 14);
+    doc.setFontSize(9);
+    doc.text(`${APP_BRAND} | ${APP_TAGLINE}`, margin, 22);
+    doc.setFontSize(8);
+    doc.text(`#ECO-${Date.now().toString().slice(-6)}`, pageWidth - margin, 14, { align: 'right' });
+    doc.text(new Date().toLocaleString(), pageWidth - margin, 22, { align: 'right' });
+
+    y = 42;
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Informacion del cliente y ruta", margin, y);
+    y += 8;
+    line("Cliente", reportData.cliente || "Nombre del cliente", margin, 80);
+    line("Telefono", reportData.telefono || "Telefono de contacto", 112, 70);
+    y += 17;
+    line("Origen", route.origin?.address || "Sin origen configurado", margin, 80);
+    line("Destino / direccion de entrega", reportData.direccion || route.destination?.address || "Sin destino configurado", 112, 70);
+    y += 20;
+    line("Distancia", route.distanceKm > 0 ? `${route.distanceKm.toFixed(1)} km` : "Pendiente", margin, 55);
+    line("Forma de pago", reportData.formaPago, 80, 45);
+    line("Abono / pendiente", `${reportData.abono || "$ 0.00"} / ${reportData.valorPendiente || "$ 0.00"}`, 135, 55);
+
+    y += 20;
+    doc.setFillColor(236, 253, 245);
+    doc.roundedRect(margin, y, pageWidth - margin * 2, 34, 3, 3, 'F');
+    doc.setTextColor(6, 95, 70);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Resumen de cubicaje e impacto", margin + 4, y + 8);
+    doc.setFontSize(9);
+    const summary = [
+      [`Espacio: ${selectedContainer.name}`, `Capacidad: ${selectedContainer.maxWeight.toLocaleString()} kg`],
+      [`Items cargados: ${placedItems.length}`, `Peso cargado: ${metrics.placedWeight.toLocaleString()} kg`],
+      [`Volumen ocupado: ${metrics.placedVol.toFixed(2)} / ${metrics.containerVol.toFixed(2)} m3`, `Uso: ${metrics.utilization.toFixed(1)}%`],
+      [`CO2 evitado: ${metrics.sustainability.co2Avoided.toFixed(2)} kg`, `Diesel evitado: ${metrics.fuelAvoided.toFixed(1)} L`],
+    ];
+    summary.forEach((row, index) => {
+      doc.text(row[0], margin + 4, y + 16 + index * 4);
+      doc.text(row[1], 112, y + 16 + index * 4);
+    });
+
+    y += 45;
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(12);
+    doc.text("Items cargados", margin, y);
+    y += 6;
+    doc.setFontSize(8);
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, y, pageWidth - margin * 2, 7, 'F');
+    doc.text("Descripcion", margin + 2, y + 5);
+    doc.text("Dimensiones", 75, y + 5);
+    doc.text("Cant.", 125, y + 5);
+    doc.text("Peso total", 150, y + 5);
+    y += 10;
+
+    items.forEach((item) => {
+      const placedOfThisType = placedItems.filter((placed) => placed.id.startsWith(item.id)).length;
+      if (placedOfThisType === 0) return;
+      if (y > 255) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFont("helvetica", "normal");
+      doc.text(doc.splitTextToSize(item.name, 55), margin + 2, y);
+      doc.text(`${item.length} x ${item.width} x ${item.height} cm`, 75, y);
+      doc.text(String(placedOfThisType), 130, y);
+      doc.text(`${(item.weight * placedOfThisType).toLocaleString()} kg`, 150, y);
+      y += 8;
+    });
+
+    y += 6;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(6, 95, 70);
+    doc.text("Algoritmo aplicado: EP-BFD (Extreme Point Best-Fit Decreasing)", margin, y);
+    y += 6;
+    doc.setTextColor(80, 80, 80);
+    doc.setFont("helvetica", "normal");
+    doc.text(doc.splitTextToSize(`Notas: ${reportData.notas || "Sin observaciones"}`, pageWidth - margin * 2), margin, y);
+
+    doc.save(`Manifiesto_EcoTransport_${Date.now()}.pdf`);
+    return;
     
     // Header
     doc.setLineWidth(0.5);
@@ -1634,30 +1748,7 @@ const App: React.FC = () => {
                   )}
                 </div>
 
-                {/* 3. Cargar */}
-                <div className="relative flex items-center gap-2">
-                  <button 
-                    onClick={() => setLoadingMode(loadingMode === 'FIFO' ? 'LIFO' : 'FIFO')}
-                    className={`p-3 rounded-full transition-all shadow-xl border ${loadingMode === 'LIFO' ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-500 border-white hover:bg-gray-100'}`}
-                    title={`Modo de Carga: ${loadingMode}`}
-                  >
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-[8px] font-black leading-none">{loadingMode}</span>
-                      <ArrowDownUp className="w-3.5 h-3.5" />
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={handlePack} 
-                    className="w-12 h-12 rounded-full bg-white border-[3px] border-[#f0f0f0] shadow-xl flex flex-col items-center justify-center hover:scale-105 active:scale-95 transition-all group overflow-hidden relative"
-                    title="Ejecutar Carga"
-                  >
-                    <span className="z-10 text-[10px] font-black text-gray-800 uppercase tracking-tighter">Cargar</span>
-                    <div className="w-4 h-[1.5px] bg-emerald-500 mt-0.5 rounded-full group-hover:w-6 transition-all"></div>
-                  </button>
-                </div>
-
-                {/* 4. Más opciones (+) */}
+                {/* 3. Más opciones (+) */}
                 <div className="relative flex items-center gap-2">
                   <button 
                     onClick={() => setShowBottomUtils(!showBottomUtils)} 
@@ -1674,6 +1765,18 @@ const App: React.FC = () => {
                       <button onClick={() => setShowShareModal(true)} className="p-2.5 bg-white rounded-full shadow text-gray-500 hover:bg-gray-100" title="Compartir"><Share2 className="w-4 h-4" /></button>
                     </div>
                   )}
+                </div>
+
+                {/* 4. Cargar y generar reporte */}
+                <div className="relative flex items-center gap-2">
+                  <button 
+                    onClick={handlePackAndReport} 
+                    className="w-12 h-12 rounded-full bg-white border-[3px] border-[#f0f0f0] shadow-xl flex flex-col items-center justify-center hover:scale-105 active:scale-95 transition-all group overflow-hidden relative"
+                    title="Ejecutar carga y generar manifiesto"
+                  >
+                    <span className="z-10 text-[10px] font-black text-gray-800 uppercase tracking-tighter">Cargar</span>
+                    <div className="w-4 h-[1.5px] bg-emerald-500 mt-0.5 rounded-full group-hover:w-6 transition-all"></div>
+                  </button>
                 </div>
               </div>
 
@@ -1780,14 +1883,6 @@ const App: React.FC = () => {
                           <option value="volume">Volumen</option>
                         </select>
                         
-                        <button 
-                          onClick={() => setLoadingMode(loadingMode === 'FIFO' ? 'LIFO' : 'FIFO')}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${loadingMode === 'LIFO' ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                          title={`Modo: ${loadingMode}`}
-                        >
-                          <span className="text-[11px] font-black">{loadingMode}</span>
-                          <ArrowDownUp className="w-3.5 h-3.5" />
-                        </button>
                       </div>
 
                       <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-l-2 border-gray-200 pl-4">
@@ -1827,7 +1922,7 @@ const App: React.FC = () => {
                                const volB = b.length * b.width * b.height;
                                comparison = volA - volB;
                              }
-                             return loadingMode === 'LIFO' ? -comparison : comparison;
+                             return comparison;
                            })
                            .map((i, index) => (
                              <tr key={i.id} className={`hover:bg-blue-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
