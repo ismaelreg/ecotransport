@@ -37,6 +37,7 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
   const [originInput, setOriginInput] = useState(route.origin?.address || '');
   const [destInput, setDestInput] = useState(route.destination?.address || '');
   const [manualDistance, setManualDistance] = useState(route.distanceKm ? String(route.distanceKm) : '');
+  const [alternativeDistance, setAlternativeDistance] = useState('');
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
 
   const originAutocompleteRef = React.useRef<google.maps.places.Autocomplete | null>(null);
@@ -154,6 +155,17 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
     setManualDistance(value);
     const distance = Number(value);
     onUpdate({ ...route, distanceKm: Number.isFinite(distance) && distance > 0 ? distance : 0 });
+  };
+
+  const currentDistance = route.distanceKm > 0 ? route.distanceKm : Number(manualDistance) || 0;
+  const alternativeKm = Number(alternativeDistance) || 0;
+  const routeDeltaKm = alternativeKm > 0 && currentDistance > 0 ? alternativeKm - currentDistance : 0;
+  const routeDeltaFuel = (routeDeltaKm / 100) * 35;
+  const routeDeltaCo2 = routeDeltaFuel * 2.68;
+  const useAlternativeRoute = () => {
+    if (alternativeKm <= 0) return;
+    setManualDistance(String(alternativeKm));
+    onUpdate({ ...route, distanceKm: alternativeKm });
   };
 
   return (
@@ -319,6 +331,51 @@ export const RouteSelector: React.FC<RouteSelectorProps> = ({ route, onUpdate, o
                   placeholder="Ej: 125"
                   className="w-full p-3 rounded-xl border border-gray-200 bg-white text-xs font-bold focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
                 />
+              </div>
+
+              <div className="p-4 bg-white border border-emerald-100 rounded-xl space-y-3 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Ruta alternativa</div>
+                    <div className="text-[10px] text-gray-400 font-bold">Compare dos rutas antes de confirmar</div>
+                  </div>
+                  <Navigation className="w-4 h-4 text-emerald-600" />
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  value={alternativeDistance}
+                  onChange={(e) => setAlternativeDistance(e.target.value)}
+                  placeholder="Km de ruta B"
+                  className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 text-xs font-bold focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
+                />
+                {alternativeKm > 0 && currentDistance > 0 && (
+                  <div className={`rounded-xl p-3 border ${routeDeltaKm <= 0 ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-[9px] font-black uppercase tracking-widest opacity-70">Km</div>
+                        <div className="text-sm font-black">{Math.abs(routeDeltaKm).toFixed(1)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] font-black uppercase tracking-widest opacity-70">Diesel</div>
+                        <div className="text-sm font-black">{Math.abs(routeDeltaFuel).toFixed(1)} L</div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] font-black uppercase tracking-widest opacity-70">CO2</div>
+                        <div className="text-sm font-black">{Math.abs(routeDeltaCo2).toFixed(1)} kg</div>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-[10px] font-bold text-center">
+                      La ruta B {routeDeltaKm <= 0 ? 'ahorra' : 'requiere'} estos recursos frente a la ruta actual.
+                    </div>
+                    <button
+                      onClick={useAlternativeRoute}
+                      className="mt-3 w-full py-2 rounded-lg bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-800 transition-colors"
+                    >
+                      Usar ruta B
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="p-4 bg-white border border-gray-200 rounded-xl space-y-3">

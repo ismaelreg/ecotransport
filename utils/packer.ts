@@ -59,6 +59,32 @@ const horizontalOverlapArea = (a: BoxBounds, b: BoxBounds) => {
   return xOverlap * zOverlap;
 };
 
+const intervalOverlap = (aStart: number, aEnd: number, bStart: number, bEnd: number) =>
+  Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
+
+const contactArea = (candidate: BoxBounds, placed: PlacedItem[]) => {
+  let area = 0;
+
+  for (const item of placed) {
+    const other = getBounds(item);
+    const xOverlap = intervalOverlap(candidate.x, candidate.x + candidate.width, other.x, other.x + other.width);
+    const yOverlap = intervalOverlap(candidate.y, candidate.y + candidate.height, other.y, other.y + other.height);
+    const zOverlap = intervalOverlap(candidate.z, candidate.z + candidate.length, other.z, other.z + other.length);
+
+    if (Math.abs(candidate.x - (other.x + other.width)) <= EPSILON || Math.abs(candidate.x + candidate.width - other.x) <= EPSILON) {
+      area += yOverlap * zOverlap;
+    }
+    if (Math.abs(candidate.z - (other.z + other.length)) <= EPSILON || Math.abs(candidate.z + candidate.length - other.z) <= EPSILON) {
+      area += xOverlap * yOverlap;
+    }
+    if (Math.abs(candidate.y - (other.y + other.height)) <= EPSILON || Math.abs(candidate.y + candidate.height - other.y) <= EPSILON) {
+      area += xOverlap * zOverlap;
+    }
+  }
+
+  return area;
+};
+
 const uniqueRotations = (item: CargoItem): Rotation[] => {
   const dims = [item.length, item.width, item.height];
   const permutations = item.tiltable
@@ -176,8 +202,14 @@ const placementScore = (
   const newCenterZ = (containerCenterZ * currentWeight + (candidate.z + rotation.length / 2) * itemWeight) / (currentWeight + itemWeight);
   const balancePenalty = Math.abs(newCenterX - containerCenterX) + Math.abs(newCenterZ - containerCenterZ) * 0.35;
   const floorPreference = candidate.y;
+  const wallContact =
+    (candidate.x <= EPSILON ? 1 : 0) +
+    (candidate.z <= EPSILON ? 1 : 0) +
+    (candidate.x + candidate.width >= container.width - EPSILON ? 1 : 0) +
+    (candidate.z + candidate.length >= container.length - EPSILON ? 1 : 0);
+  const compactnessBonus = contactArea(candidate, placed) * 0.08 + wallContact * 450;
 
-  return enclosingVolume + maxY * 250 + maxZ * 25 + balancePenalty * 10 + floorPreference * 8;
+  return enclosingVolume + maxY * 250 + maxZ * 25 + balancePenalty * 10 + floorPreference * 8 - compactnessBonus;
 };
 
 const buildExtremePoints = (placed: PlacedItem[], container: Container): Point[] => {

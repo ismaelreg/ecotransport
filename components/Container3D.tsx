@@ -574,7 +574,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
   return <div ref={hostRef} className="w-full h-full bg-[#bebebe]" />;
 };
 
-class GlbErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class GlbErrorBoundary extends React.Component<{ children: React.ReactNode; fallback?: React.ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
 
   static getDerivedStateFromError() {
@@ -582,10 +582,38 @@ class GlbErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 
   render() {
-    if (this.state.hasError) return null;
+    if (this.state.hasError) return this.props.fallback ?? null;
     return this.props.children;
   }
 }
+
+const LoadSpaceFallback: React.FC<Container3DProps> = ({ container, placedItems }) => {
+  const utilization =
+    placedItems.length > 0
+      ? placedItems.reduce((acc, item) => acc + item.length * item.width * item.height, 0) /
+        (container.length * container.width * (container.height || 240))
+      : 0;
+
+  return (
+    <div className="w-full h-full bg-[#bebebe] flex items-center justify-center p-6">
+      <div className="w-[min(520px,90vw)] bg-white/90 border border-white rounded-2xl shadow-2xl p-6 text-center">
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Vista de respaldo</div>
+        <div className="mt-2 text-xl font-black text-gray-900">{container.name}</div>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-xs font-bold text-gray-600">
+          <div className="rounded-xl bg-gray-50 p-3">{container.length} cm<br /><span className="text-[9px] text-gray-400">LARGO</span></div>
+          <div className="rounded-xl bg-gray-50 p-3">{container.width} cm<br /><span className="text-[9px] text-gray-400">ANCHO</span></div>
+          <div className="rounded-xl bg-gray-50 p-3">{container.height || 240} cm<br /><span className="text-[9px] text-gray-400">ALTO</span></div>
+        </div>
+        <div className="mt-4 h-3 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, utilization * 100)}%` }} />
+        </div>
+        <div className="mt-2 text-[11px] font-black text-gray-500 uppercase tracking-widest">
+          {placedItems.length} cajas posicionadas / {(utilization * 100).toFixed(1)}% de volumen
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const CargoBox: React.FC<{ item: PlacedItem; container: Container }> = ({ item, container }) => {
   // Posicionamiento relativo al centro del contenedor (Three.js coordenadas)
@@ -1532,6 +1560,7 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
   }
 
   return (
+    <GlbErrorBoundary fallback={<LoadSpaceFallback container={container} placedItems={placedItems} showWeightHeatmap={showWeightHeatmap} cameraView={cameraView} />}>
     <div className="canvas-container relative w-full h-full bg-[#bebebe]">
       <Canvas
         className="canvas-container__surface relative z-0"
@@ -1577,5 +1606,6 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
         </div>
       )}
     </div>
+    </GlbErrorBoundary>
   );
 };

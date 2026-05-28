@@ -692,6 +692,7 @@ const App: React.FC = () => {
     const found = containerList.find((container) => container.type === type);
     if (found) {
       setSelectedContainer(found);
+      setPlacedItems([]);
       setActiveView('simulador');
     }
   }, [containerList]);
@@ -708,6 +709,7 @@ const App: React.FC = () => {
     };
     setContainerList(prev => [...prev, newContainer]);
     setSelectedContainer(newContainer);
+    setPlacedItems([]);
     setActiveView('simulador');
   }, [customSpace]);
 
@@ -715,6 +717,7 @@ const App: React.FC = () => {
     const safeValue = Math.max(1, Number(value) || 1);
     const updatedContainer = { ...selectedContainer, [field]: safeValue };
     setSelectedContainer(updatedContainer);
+    setPlacedItems([]);
     setContainerList(prev => prev.map(container => container.id === selectedContainer.id ? updatedContainer : container));
   }, [selectedContainer]);
 
@@ -767,7 +770,10 @@ const App: React.FC = () => {
         setShowSetup(!remote.setup_done);
 
         const selected = nextContainers.find((container) => container.id === remote.selected_container_id);
-        if (selected) setSelectedContainer(selected);
+        if (selected) {
+          setSelectedContainer(selected);
+          setPlacedItems([]);
+        }
       }
 
       setIsRemoteStateReady(true);
@@ -825,6 +831,7 @@ const App: React.FC = () => {
     const placedWeight = placedItems.reduce((acc, i) => acc + i.weight, 0);
     const utilization = containerVol > 0 ? (placedVol / containerVol) * 100 : 0;
     const totalInventoryWeight = items.reduce((acc, i) => acc + (i.weight * i.quantity), 0);
+    const totalInventoryVolume = placedVol + packingResult.unplacedVolume;
 
     // Métricas de Sustentabilidad
     const distanceKm = route.distanceKm > 0 ? route.distanceKm : 500; // Distancia real o promedio
@@ -834,16 +841,23 @@ const App: React.FC = () => {
     
     // Consumo estimado (litros de diesel)
     // Promedio: 35L / 100km para un camión cargado
-    const fuelConsumption = (distanceKm / 100) * 35 * (placedWeight / selectedContainer.maxWeight || 1);
+    const fullTripFuel = (distanceKm / 100) * 35;
+    const loadedWeightRatio = Math.max(0.15, placedWeight / selectedContainer.maxWeight || 0.15);
+    const fuelConsumption = fullTripFuel * loadedWeightRatio;
 
     // Ahorro sustentable: compara contra una operacion con 60% de cubica promedio.
     const baselineUtilization = 60;
-    const optimizedTrips = placedVol > 0 && containerVol > 0 ? Math.ceil(placedVol / containerVol) : 0;
-    const baselineTrips = placedVol > 0 && containerVol > 0 ? Math.ceil(placedVol / (containerVol * (baselineUtilization / 100))) : 0;
+    const tripsByVolume = totalInventoryVolume > 0 && containerVol > 0 ? Math.ceil(totalInventoryVolume / containerVol) : 0;
+    const tripsByWeight = totalInventoryWeight > 0 && selectedContainer.maxWeight > 0 ? Math.ceil(totalInventoryWeight / selectedContainer.maxWeight) : 0;
+    const optimizedTrips = Math.max(tripsByVolume, tripsByWeight, packingResult.unplacedCount > 0 ? 2 : 0);
+    const baselineTrips = totalInventoryVolume > 0 && containerVol > 0 ? Math.ceil(totalInventoryVolume / (containerVol * (baselineUtilization / 100))) : 0;
     const tripsAvoided = Math.max(0, baselineTrips - optimizedTrips);
-    const fuelPerTrip = (distanceKm / 100) * 35 * Math.max(0.15, placedWeight / selectedContainer.maxWeight || 0.15);
+    const fuelPerTrip = fullTripFuel * loadedWeightRatio;
     const fuelAvoided = tripsAvoided * fuelPerTrip;
     const co2Avoided = fuelAvoided * 2.68;
+    const overflowWeightRatio = Math.max(0.15, packingResult.unplacedWeight / selectedContainer.maxWeight || 0);
+    const overflowFuelRequired = packingResult.unplacedCount > 0 ? fullTripFuel * overflowWeightRatio : 0;
+    const overflowCo2Required = overflowFuelRequired * 2.68;
 
     // LCEI: Logistics Carbon Efficiency Index (0-100)
     // Basado en utilización de volumen y peso
@@ -861,9 +875,13 @@ const App: React.FC = () => {
       placedWeight,
       utilization,
       totalInventoryWeight,
+      totalInventoryVolume,
       unplacedCount: packingResult.unplacedCount,
       unplacedWeight: packingResult.unplacedWeight,
       unplacedVolume: packingResult.unplacedVolume,
+      requiredTrips: optimizedTrips,
+      overflowFuelRequired,
+      overflowCo2Required,
       distanceKm,
       fuelConsumption,
       fuelAvoided,
@@ -895,15 +913,6 @@ const App: React.FC = () => {
     handlePack();
     setShowTicket(true);
   }, [handlePack]);
-
-  useEffect(() => {
-    if (!route.destination?.address) return;
-    setReportData(prev => (
-      prev.direccion === route.destination?.address
-        ? prev
-        : { ...prev, direccion: route.destination?.address || prev.direccion }
-    ));
-  }, [route.destination?.address]);
 
   const requestAiAdvice = async () => {
     setIsAiLoading(true);
@@ -964,7 +973,7 @@ const App: React.FC = () => {
 
     y += 20;
     doc.setFillColor(236, 253, 245);
-    doc.roundedRect(margin, y, pageWidth - margin * 2, 34, 3, 3, 'F');
+    doc.roundedRect(margin, y, pageWidth - margin * 2, 42, 3, 3, 'F');
     doc.setTextColor(6, 95, 70);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
@@ -975,13 +984,15 @@ const App: React.FC = () => {
       [`Items cargados: ${placedItems.length}`, `Peso cargado: ${metrics.placedWeight.toLocaleString()} kg`],
       [`Volumen ocupado: ${metrics.placedVol.toFixed(2)} / ${metrics.containerVol.toFixed(2)} m3`, `Uso: ${metrics.utilization.toFixed(1)}%`],
       [`CO2 evitado: ${metrics.sustainability.co2Avoided.toFixed(2)} kg`, `Diesel evitado: ${metrics.fuelAvoided.toFixed(1)} L`],
+      [`Sobrante: ${metrics.unplacedCount} cajas / ${metrics.unplacedVolume.toFixed(2)} m3`, `Viajes requeridos: ${metrics.requiredTrips}`],
+      [`CO2 viaje sobrante: ${metrics.overflowCo2Required.toFixed(2)} kg`, `Diesel viaje sobrante: ${metrics.overflowFuelRequired.toFixed(1)} L`],
     ];
     summary.forEach((row, index) => {
       doc.text(row[0], margin + 4, y + 16 + index * 4);
       doc.text(row[1], 112, y + 16 + index * 4);
     });
 
-    y += 45;
+    y += 53;
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(12);
     doc.text("Items cargados", margin, y);
@@ -1010,10 +1021,6 @@ const App: React.FC = () => {
       y += 8;
     });
 
-    y += 6;
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(6, 95, 70);
-    doc.text("Algoritmo aplicado: EP-BFD (Extreme Point Best-Fit Decreasing)", margin, y);
     y += 6;
     doc.setTextColor(80, 80, 80);
     doc.setFont("helvetica", "normal");
@@ -1223,6 +1230,7 @@ const App: React.FC = () => {
           onConfirm={(c) => { 
             const found = containerList.find(x => x.type === c.type);
             setSelectedContainer(found || containerList[1]); 
+            setPlacedItems([]);
             localStorage.setItem('cargo_setup_done', 'true');
             setShowSetup(false); 
           }} 
@@ -1454,12 +1462,12 @@ const App: React.FC = () => {
                     </div>
                     <div className="mt-3 border-t border-emerald-700/60 pt-3 grid grid-cols-2 gap-3 text-[10px] text-emerald-100">
                       <div>
-                        <span className="block font-black text-white">24%</span>
-                        <span className="uppercase tracking-widest">transporte de aire objetivo</span>
+                        <span className="block font-black text-white">{metrics.requiredTrips}</span>
+                        <span className="uppercase tracking-widest">viajes requeridos</span>
                       </div>
                       <div>
-                        <span className="block font-black text-white">NOM-012 / ISO 14001</span>
-                        <span className="uppercase tracking-widest">base normativa</span>
+                        <span className="block font-black text-white">{metrics.overflowFuelRequired.toFixed(1)} L</span>
+                        <span className="uppercase tracking-widest">diesel viaje sobrante</span>
                       </div>
                     </div>
                   </div>
@@ -1519,6 +1527,9 @@ const App: React.FC = () => {
                               <p className="text-[10px] font-bold text-amber-900 leading-snug">
                                 {packingResult.unplacedCount} cajas fuera del limite ({packingResult.unplacedWeight.toLocaleString()} kg / {packingResult.unplacedVolume.toFixed(2)} m3).
                               </p>
+                              <p className="text-[9px] font-bold text-amber-800 leading-snug mt-1">
+                                Viaje sobrante estimado: {metrics.overflowFuelRequired.toFixed(1)} L diesel / {metrics.overflowCo2Required.toFixed(1)} kg CO2. Viajes requeridos: {metrics.requiredTrips}.
+                              </p>
                             </div>
                           </div>
                           <div className="flex items-center justify-between gap-2">
@@ -1529,7 +1540,10 @@ const App: React.FC = () => {
                               <div className="text-[11px] font-black text-gray-800 truncate">{overflowRecommendation.container.name}</div>
                             </div>
                             <button
-                              onClick={() => setSelectedContainer(overflowRecommendation.container)}
+                              onClick={() => {
+                                setSelectedContainer(overflowRecommendation.container);
+                                setPlacedItems([]);
+                              }}
                               className="shrink-0 px-3 py-1.5 bg-emerald-700 text-white rounded-lg text-[9px] font-black uppercase hover:bg-emerald-800 transition-colors"
                             >
                               Usar
@@ -2008,7 +2022,7 @@ const App: React.FC = () => {
                          </thead>
                          <tbody>
                             {containerList.filter(c => filterType === 'all' || c.type === filterType).map(c => (
-                              <tr key={c.id} onClick={() => { setSelectedContainer(c); setActiveView('simulador'); }} className="border-b border-gray-50 hover:bg-[#fff9e6] cursor-pointer group transition-colors">
+                              <tr key={c.id} onClick={() => { setSelectedContainer(c); setPlacedItems([]); setActiveView('simulador'); }} className="border-b border-gray-50 hover:bg-[#fff9e6] cursor-pointer group transition-colors">
                                  <td className="p-4 font-black text-blue-600 text-[12px]">{c.name}</td>
                                  <td className="p-4 text-gray-400 italic font-medium">{c.type}</td>
                                  <td className="p-4 text-right font-mono font-bold text-gray-600">{c.length}</td>
@@ -2023,6 +2037,7 @@ const App: React.FC = () => {
                                         setContainerList(nextContainers);
                                         if (selectedContainer.id === c.id) {
                                           setSelectedContainer(nextContainers[0] || CONTAINERS[0]);
+                                          setPlacedItems([]);
                                         }
                                       }}
                                       className="p-1 rounded hover:bg-red-50"
