@@ -1474,11 +1474,12 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Floating Capacity Summary Bar */}
-              <div
-                className={`absolute z-30 left-3 bottom-3 sm:left-1/2 sm:-translate-x-1/2 transition-all duration-500 ease-in-out ${showCapacitySummary ? 'w-[min(400px,calc(100vw-24px))]' : 'w-[min(260px,calc(100vw-24px))]'}`}
-              >
-                <div className="bg-white/95 backdrop-blur-md border border-white shadow-2xl rounded-2xl overflow-hidden">
+              {/* Bottom Control Dock */}
+              <div className="absolute z-30 left-3 right-3 bottom-3 flex flex-col-reverse sm:flex-row items-center justify-center gap-2 sm:gap-3 pointer-events-none">
+                <div
+                  className={`pointer-events-auto transition-all duration-500 ease-in-out ${showCapacitySummary ? 'w-[min(400px,calc(100vw-24px))]' : 'w-[min(260px,calc(100vw-24px))]'}`}
+                >
+                  <div className="bg-white/95 backdrop-blur-md border border-white shadow-2xl rounded-2xl overflow-hidden">
                   {/* Header / Toggle Button */}
                   <div className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
                     <div className="p-1 -ml-1 text-gray-300">
@@ -1607,6 +1608,32 @@ const App: React.FC = () => {
                       </div>
                     </div>
                   </div>
+                  </div>
+                </div>
+
+                <div className="pointer-events-auto flex items-center gap-1.5 bg-white/95 backdrop-blur-md shadow-2xl p-1.5 rounded-2xl border border-white">
+                  {[
+                    { type: 'truck' as Container['type'], label: 'Camion', icon: Truck },
+                    { type: 'pallet' as Container['type'], label: 'Pallet', icon: Package },
+                    { type: 'container' as Container['type'], label: 'Contenedor', icon: Box },
+                  ].map(({ type, label, icon: Icon }) => {
+                    const isActive = selectedContainer.type === type;
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => selectFirstContainerByType(type)}
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all border ${
+                          isActive
+                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-md'
+                            : 'bg-white text-gray-500 border-gray-100 hover:bg-emerald-50 hover:text-emerald-700'
+                        }`}
+                        title={`Seleccionar ${label}`}
+                        aria-label={`Seleccionar ${label}`}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               
@@ -1799,26 +1826,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1 z-10 bg-white shadow-2xl p-1 rounded-xl border border-gray-200">
-                 <button onClick={() => selectFirstContainerByType('truck')} className="px-3 py-1 flex flex-col items-center gap-0.5 hover:bg-gray-50 rounded-lg transition-all border border-transparent hover:border-gray-100">
-                    <Truck className="w-4 h-4 text-gray-400" />
-                    <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">Camiones</span>
-                 </button>
-                 <div className="w-[1px] bg-gray-100 my-1.5"></div>
-                 <button 
-                   onClick={() => selectFirstContainerByType('pallet')} 
-                   onDoubleClick={() => setShowTicket(true)}
-                   className="px-3 py-1 flex flex-col items-center gap-0.5 hover:bg-gray-50 rounded-lg transition-all border border-transparent hover:border-gray-100"
-                 >
-                    <Package className="w-4 h-4 text-gray-400" />
-                    <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">Palets</span>
-                 </button>
-                 <div className="w-[1px] bg-gray-100 my-1.5"></div>
-                 <button onClick={() => selectFirstContainerByType('container')} className="px-3 py-1 flex flex-col items-center gap-0.5 hover:bg-gray-50 rounded-lg transition-all border border-transparent hover:border-gray-100">
-                    <Box className="w-4 h-4 text-gray-400" />
-                    <span className="text-[8px] font-black uppercase text-gray-400 tracking-widest">Contenedores</span>
-                 </button>
-              </div>
             </main>
           </>
         ) : (
