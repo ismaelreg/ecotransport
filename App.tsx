@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Container, CargoItem, PlacedItem, CONTAINERS, Route } from './types';
 import { packItemsDetailed } from './utils/packer';
+import { Container3D } from './components/Container3D';
 import { ItemEditor } from './components/ItemEditor';
 import { InitialSetup } from './components/InitialSetup';
 import { PwaInstallButton } from './components/PwaInstallButton';
@@ -33,7 +34,6 @@ const CURRENT_USER = {
 const AUTH_PASSWORD = '3.1416';
 const APP_LOGO = `${import.meta.env.BASE_URL || './'}icons/eco-transport-logo.jpeg`;
 
-const Container3D = lazy(() => import('./components/Container3D').then((module) => ({ default: module.Container3D })));
 const RouteSelector = lazy(() => import('./components/RouteSelector').then((module) => ({ default: module.RouteSelector })));
 
 const DEFAULT_ITEMS: CargoItem[] = [
@@ -1455,24 +1455,13 @@ const App: React.FC = () => {
 
             <main className="flex-1 relative bg-[#bebebe]">
               <div className="absolute inset-0">
-                <Suspense
-                  fallback={
-                    <div className="w-full h-full bg-[#aeb4b2] flex items-center justify-center">
-                      <div className="flex items-center gap-3 rounded-xl bg-white/80 px-5 py-3 text-xs font-black uppercase tracking-widest text-emerald-900 shadow-lg">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Cargando visor 3D
-                      </div>
-                    </div>
-                  }
-                >
-                  <Container3D 
-                    key={`${selectedContainer.id}-${placedItems.length}`}
-                    container={selectedContainer} 
-                    placedItems={placedItems} 
-                    showWeightHeatmap={showWeightHeatmap} 
-                    cameraView={cameraView}
-                  />
-                </Suspense>
+                <Container3D 
+                  key={`${selectedContainer.id}-${placedItems.length}`}
+                  container={selectedContainer} 
+                  placedItems={placedItems} 
+                  showWeightHeatmap={showWeightHeatmap} 
+                  cameraView={cameraView}
+                />
               </div>
 
               <div className="absolute z-30 right-3 bottom-24 sm:right-6 sm:bottom-6 w-[min(360px,calc(100vw-24px))] bg-emerald-950/92 text-white rounded-2xl shadow-2xl border border-emerald-400/30 backdrop-blur-md overflow-hidden">
