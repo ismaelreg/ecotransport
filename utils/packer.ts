@@ -119,6 +119,67 @@ const uniqueRotations = (item: CargoItem): Rotation[] => {
   }, []);
 };
 
+const packHomogeneousGrid = (container: Container, item: CargoItem): PackingResult => {
+  const rotations = uniqueRotations(item);
+  const bestRotation = rotations
+    .map((rotation) => {
+      const countX = Math.floor(container.width / rotation.width);
+      const countY = Math.floor((container.height || 450) / rotation.height);
+      const countZ = Math.floor(container.length / rotation.length);
+      return {
+        rotation,
+        countX,
+        countY,
+        countZ,
+        capacity: countX * countY * countZ,
+      };
+    })
+    .sort((a, b) => b.capacity - a.capacity)[0];
+
+  const weightCapacity = item.weight > 0 ? Math.floor(container.maxWeight / item.weight) : item.quantity;
+  const maxBySpaceAndWeight = Math.max(0, Math.min(bestRotation.capacity, weightCapacity));
+  const placedCount = Math.min(item.quantity, maxBySpaceAndWeight);
+  const placedItems: PlacedItem[] = [];
+
+  for (let index = 0; index < placedCount; index++) {
+    const xIndex = index % bestRotation.countX;
+    const yIndex = Math.floor(index / bestRotation.countX) % bestRotation.countY;
+    const zIndex = Math.floor(index / (bestRotation.countX * bestRotation.countY));
+
+    placedItems.push({
+      ...item,
+      id: `${item.id}-${index}`,
+      quantity: 1,
+      width: bestRotation.rotation.width,
+      height: bestRotation.rotation.height,
+      length: bestRotation.rotation.length,
+      position: [
+        xIndex * bestRotation.rotation.width + bestRotation.rotation.width / 2,
+        yIndex * bestRotation.rotation.height + bestRotation.rotation.height / 2,
+        zIndex * bestRotation.rotation.length + bestRotation.rotation.length / 2,
+      ],
+    });
+  }
+
+  const unplacedCount = item.quantity - placedCount;
+  const reason: UnplacedReason = weightCapacity < Math.min(item.quantity, bestRotation.capacity) ? "weight" : "space";
+  const unplacedItems: UnplacedItem[] = Array.from({ length: unplacedCount }, (_, index) => ({
+    ...item,
+    id: `${item.id}-${placedCount + index}`,
+    quantity: 1,
+    reason,
+  }));
+
+  return {
+    placedItems,
+    unplacedItems,
+    totalItems: item.quantity,
+    unplacedCount,
+    unplacedWeight: unplacedItems.reduce((acc, unplacedItem) => acc + unplacedItem.weight, 0),
+    unplacedVolume: unplacedItems.reduce((acc, unplacedItem) => acc + volumeOf(unplacedItem), 0) / 1000000,
+  };
+};
+
 const hasEnoughSupport = (candidate: BoxBounds, placed: PlacedItem[]) => {
   if (candidate.y <= EPSILON) return true;
 
@@ -240,6 +301,10 @@ export const packItemsDetailed = (
   items: CargoItem[],
   loadingMode: "FIFO" | "LIFO" = "FIFO"
 ): PackingResult => {
+  if (items.length === 1) {
+    return packHomogeneousGrid(container, items[0]);
+  }
+
   const placed: PlacedItem[] = [];
   const unplacedItems: UnplacedItem[] = [];
   const orderedGroups = loadingMode === "LIFO" ? [...items].reverse() : [...items];
