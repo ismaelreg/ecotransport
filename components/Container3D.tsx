@@ -1578,7 +1578,7 @@ const EnhancedTruckBody: React.FC<{ container: Container }> = ({ container }) =>
   );
 };
 
-const ContainerModel: React.FC<{ container: Container }> = ({ container }) => {
+const ContainerModel: React.FC<{ container: Container; hideTranslucentShell?: boolean }> = ({ container, hideTranslucentShell = false }) => {
   const w = container.width / 100;
   const h = (container.height || 240) / 100;
   const l = container.length / 100;
@@ -1593,16 +1593,23 @@ const ContainerModel: React.FC<{ container: Container }> = ({ container }) => {
 
   return (
     <group>
-      {container.type === 'truck' && USE_GLB_TRUCK ? (
+      {!hideTranslucentShell && (container.type === 'truck' && USE_GLB_TRUCK ? (
         <TruckModelWithGlb container={container} />
       ) : (
         <Model container={container} />
-      )}
+      ))}
       
       {/* Guía visual del espacio de carga siempre presente para referencia */}
-      <mesh position={[0, h / 2, 0]}>
+      <mesh position={[0, h / 2, 0]} renderOrder={1}>
         <boxGeometry args={[w, h, l]} />
-        <meshStandardMaterial color="#10b981" transparent opacity={0.1} side={THREE.DoubleSide} depthWrite={false} />
+        <meshStandardMaterial
+          color="#10b981"
+          transparent
+          opacity={hideTranslucentShell ? 0.025 : 0.08}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+          depthTest={false}
+        />
         <Edges color="#007f5f" threshold={1} />
       </mesh>
     </group>
@@ -1685,7 +1692,7 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
         <directionalLight position={[-10, 10, -5]} intensity={0.35} />
         
         <group>
-          <ContainerModel container={container} />
+          <ContainerModel container={container} hideTranslucentShell={placedItems.length > DETAILED_CARGO_LIMIT} />
           {placedItems.length > DETAILED_CARGO_LIMIT ? (
             <InstancedCargoBoxes items={placedItems} container={container} />
           ) : (
