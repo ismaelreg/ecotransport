@@ -7,6 +7,8 @@ import './index.css';
 declare global {
   interface Window {
     __ecoStartupTimer?: number;
+    __ecoAutoResetTimer?: number;
+    __ecoAppBooted?: boolean;
     ecoResetAndReload?: () => void;
   }
 }
@@ -60,14 +62,17 @@ root.render(
   </AppErrorBoundary>
 );
 
+window.__ecoAppBooted = true;
 window.clearTimeout(window.__ecoStartupTimer);
+window.clearTimeout(window.__ecoAutoResetTimer);
 document.documentElement.classList.remove('eco-startup-slow');
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    const baseUrl = import.meta.env.BASE_URL || './';
-    navigator.serviceWorker.register(`${baseUrl}sw.js`, { updateViaCache: 'none' }).catch((error) => {
-      console.warn('[ecotransport] No se pudo registrar el service worker', error);
-    });
+    navigator.serviceWorker.getRegistrations()
+      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      .catch((error) => {
+        console.warn('[ecotransport] No se pudo limpiar el service worker', error);
+      });
   });
 }

@@ -140,6 +140,13 @@
         document.documentElement.classList.add('eco-startup-slow');
       }, 10000);
 
+      window.__ecoAutoResetTimer = window.setTimeout(function () {
+        if (window.__ecoAppBooted) return;
+        if (sessionStorage.getItem('eco-auto-reset-done') === 'true') return;
+        sessionStorage.setItem('eco-auto-reset-done', 'true');
+        window.ecoResetAndReload && window.ecoResetAndReload();
+      }, 14000);
+
       window.ecoResetAndReload = function () {
         try {
           localStorage.removeItem('cargo_items');
