@@ -14,6 +14,7 @@ const DRACO_DECODER_PATH = `${assetBaseUrl}draco/`;
 const USE_GLB_TRUCK = true;
 const DETAILED_CARGO_LIMIT = 320;
 const VIEWPORT_BG = '#aeb4b2';
+const CARGO_EDGE_COLOR = '#24170f';
 
 // Opción A: Modelo Proxy Ligero (Optimizado para web)
 
@@ -384,6 +385,12 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
         mesh.renderOrder = 3;
         cargoGroup.add(mesh);
       });
+      const optimizedEdges = new THREE.LineSegments(
+        buildCargoEdgesGeometry(placedItems, container, lateralDisplayScale),
+        new THREE.LineBasicMaterial({ color: CARGO_EDGE_COLOR, transparent: true, opacity: 0.46 })
+      );
+      optimizedEdges.renderOrder = 4;
+      cargoGroup.add(optimizedEdges);
     } else {
       placedItems.forEach((item) => {
         const visualFill = 1.006;
@@ -629,6 +636,42 @@ const readableCargoColor = (color: string) => {
   const brightness = parsed.r * 0.299 + parsed.g * 0.587 + parsed.b * 0.114;
   if (brightness > 0.72) parsed.multiplyScalar(0.58);
   return parsed;
+};
+
+const buildCargoEdgesGeometry = (items: PlacedItem[], container: Container, lateralDisplayScale = 1, visualFill = 1) => {
+  const positions: number[] = [];
+  const edgePairs = [
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    [4, 5], [5, 6], [6, 7], [7, 4],
+    [0, 4], [1, 5], [2, 6], [3, 7],
+  ];
+
+  items.forEach((item) => {
+    const width = (item.width / 100) * visualFill;
+    const height = (item.height / 100) * visualFill;
+    const length = (item.length / 100) * visualFill;
+    const x = ((item.position[0] - container.width / 2) / 100) * lateralDisplayScale;
+    const y = item.position[1] / 100;
+    const z = (item.position[2] - container.length / 2) / 100;
+    const corners = [
+      [x - width / 2, y - height / 2, z - length / 2],
+      [x + width / 2, y - height / 2, z - length / 2],
+      [x + width / 2, y + height / 2, z - length / 2],
+      [x - width / 2, y + height / 2, z - length / 2],
+      [x - width / 2, y - height / 2, z + length / 2],
+      [x + width / 2, y - height / 2, z + length / 2],
+      [x + width / 2, y + height / 2, z + length / 2],
+      [x - width / 2, y + height / 2, z + length / 2],
+    ];
+
+    edgePairs.forEach(([from, to]) => {
+      positions.push(...corners[from], ...corners[to]);
+    });
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  return geometry;
 };
 
 class GlbErrorBoundary extends React.Component<{ children: React.ReactNode; fallback?: React.ReactNode }, { hasError: boolean }> {
@@ -1559,7 +1602,7 @@ const ContainerModel: React.FC<{ container: Container }> = ({ container }) => {
       {/* Guía visual del espacio de carga siempre presente para referencia */}
       <mesh position={[0, h / 2, 0]}>
         <boxGeometry args={[w, h, l]} />
-        <meshStandardMaterial color="#10b981" transparent opacity={0.12} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#10b981" transparent opacity={0.1} side={THREE.DoubleSide} depthWrite={false} />
         <Edges color="#007f5f" threshold={1} />
       </mesh>
     </group>
@@ -1733,7 +1776,7 @@ const InstancedCargoGroup: React.FC<{
   }, [container, group.items, matrix, position, rotation, scale]);
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, group.items.length]} castShadow receiveShadow>
+    <instancedMesh ref={meshRef} args={[undefined, undefined, group.items.length]} renderOrder={3} castShadow receiveShadow>
       <boxGeometry args={[group.width / 100, group.height / 100, group.length / 100]} />
       <meshStandardMaterial
         color={readableCargoColor(group.color)}
@@ -1746,6 +1789,18 @@ const InstancedCargoGroup: React.FC<{
   );
 };
 
+const InstancedCargoEdges: React.FC<{ items: PlacedItem[]; container: Container }> = ({ items, container }) => {
+  const geometry = useMemo(() => buildCargoEdgesGeometry(items, container), [items, container]);
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
+
+  return (
+    <lineSegments geometry={geometry} renderOrder={4}>
+      <lineBasicMaterial color={CARGO_EDGE_COLOR} transparent opacity={0.48} />
+    </lineSegments>
+  );
+};
+
 const InstancedCargoBoxes: React.FC<{ items: PlacedItem[]; container: Container }> = ({ items, container }) => {
   const groups = useMemo(() => groupCargoItems(items), [items]);
 
@@ -1754,6 +1809,7 @@ const InstancedCargoBoxes: React.FC<{ items: PlacedItem[]; container: Container 
       {groups.map((group) => (
         <InstancedCargoGroup key={group.key} group={group} container={container} />
       ))}
+      <InstancedCargoEdges items={items} container={container} />
     </>
   );
 };
