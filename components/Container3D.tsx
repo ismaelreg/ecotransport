@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useRef, useState, Suspense } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, Text, PerspectiveCamera, Edges, RoundedBox, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -12,6 +12,7 @@ const assetBaseUrl = import.meta.env.BASE_URL || './';
 const EV_TRUCK_GLB_URL = `${assetBaseUrl}models/ev-truck-original.glb`;
 const DRACO_DECODER_PATH = `${assetBaseUrl}draco/`;
 const USE_GLB_TRUCK = true;
+const DETAILED_CARGO_LIMIT = 320;
 
 // Opción A: Modelo Proxy Ligero (Optimizado para web)
 
@@ -347,38 +348,72 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
 
     const cargoGroup = new THREE.Group();
     cargoGroup.position.set(0, cargoLift, cargoDeckOffsetZ);
-    placedItems.forEach((item) => {
-      const visualFill = 1.006;
-      const itemW = Math.max((item.width / 100) * visualFill, 0.02);
-      const itemH = Math.max((item.height / 100) * visualFill, 0.02);
-      const itemL = Math.max((item.length / 100) * visualFill, 0.02);
-      const xPos = ((item.position[0] - container.width / 2) / 100) * lateralDisplayScale;
-      const yPos = item.position[1] / 100;
-      const zPos = (item.position[2] - container.length / 2) / 100;
-      const box = new THREE.Mesh(
-        new THREE.BoxGeometry(itemW, itemH, itemL),
-        new THREE.MeshStandardMaterial({
-          color: item.color,
-          roughness: 0.4,
-          metalness: 0.05,
-          emissive: new THREE.Color(item.color),
-          emissiveIntensity: 0.08,
-        })
-      );
-      box.position.set(xPos, yPos, zPos);
-      box.castShadow = true;
-      box.receiveShadow = true;
-      box.renderOrder = 3;
-      cargoGroup.add(box);
+    const useInstancedCargo = placedItems.length > DETAILED_CARGO_LIMIT;
 
-      const boxEdges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(box.geometry),
-        new THREE.LineBasicMaterial({ color: '#2a1f12', transparent: true, opacity: 0.38 })
-      );
-      boxEdges.position.copy(box.position);
-      boxEdges.renderOrder = 4;
-      cargoGroup.add(boxEdges);
-    });
+    if (useInstancedCargo) {
+      const matrix = new THREE.Matrix4();
+      const position = new THREE.Vector3();
+      const rotation = new THREE.Quaternion();
+      const scale = new THREE.Vector3(1, 1, 1);
+      groupCargoItems(placedItems).forEach((group) => {
+        const geometry = new THREE.BoxGeometry(group.width / 100, group.height / 100, group.length / 100);
+        const material = new THREE.MeshStandardMaterial({
+          color: group.color,
+          roughness: 0.44,
+          metalness: 0.04,
+          emissive: new THREE.Color(group.color),
+          emissiveIntensity: 0.06,
+        });
+        const mesh = new THREE.InstancedMesh(geometry, material, group.items.length);
+        group.items.forEach((item, index) => {
+          position.set(
+            ((item.position[0] - container.width / 2) / 100) * lateralDisplayScale,
+            item.position[1] / 100,
+            (item.position[2] - container.length / 2) / 100
+          );
+          matrix.compose(position, rotation, scale);
+          mesh.setMatrixAt(index, matrix);
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.renderOrder = 3;
+        cargoGroup.add(mesh);
+      });
+    } else {
+      placedItems.forEach((item) => {
+        const visualFill = 1.006;
+        const itemW = Math.max((item.width / 100) * visualFill, 0.02);
+        const itemH = Math.max((item.height / 100) * visualFill, 0.02);
+        const itemL = Math.max((item.length / 100) * visualFill, 0.02);
+        const xPos = ((item.position[0] - container.width / 2) / 100) * lateralDisplayScale;
+        const yPos = item.position[1] / 100;
+        const zPos = (item.position[2] - container.length / 2) / 100;
+        const box = new THREE.Mesh(
+          new THREE.BoxGeometry(itemW, itemH, itemL),
+          new THREE.MeshStandardMaterial({
+            color: item.color,
+            roughness: 0.4,
+            metalness: 0.05,
+            emissive: new THREE.Color(item.color),
+            emissiveIntensity: 0.08,
+          })
+        );
+        box.position.set(xPos, yPos, zPos);
+        box.castShadow = true;
+        box.receiveShadow = true;
+        box.renderOrder = 3;
+        cargoGroup.add(box);
+
+        const boxEdges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(box.geometry),
+          new THREE.LineBasicMaterial({ color: '#2a1f12', transparent: true, opacity: 0.38 })
+        );
+        boxEdges.position.copy(box.position);
+        boxEdges.renderOrder = 4;
+        cargoGroup.add(boxEdges);
+      });
+    }
     scene.add(cargoGroup);
 
     if (showWeightHeatmap && placedItems.length > 0) {
@@ -571,7 +606,18 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     );
   }
 
-  return <div ref={hostRef} className="w-full h-full bg-[#bebebe]" />;
+  return (
+    <div className="relative w-full h-full bg-[#bebebe]">
+      <div ref={hostRef} className="w-full h-full" />
+      {placedItems.length > DETAILED_CARGO_LIMIT && (
+        <div className="absolute top-4 right-4 pointer-events-none rounded-full bg-white/90 border border-white px-4 py-2 shadow-xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">
+            Vista optimizada: {placedItems.length.toLocaleString()} cajas
+          </span>
+        </div>
+      )}
+    </div>
+  );
 };
 
 class GlbErrorBoundary extends React.Component<{ children: React.ReactNode; fallback?: React.ReactNode }, { hasError: boolean }> {
@@ -1582,9 +1628,13 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
         
         <group>
           <ContainerModel container={container} />
-          {placedItems.map((item, idx) => (
-            <CargoBox key={`${item.id}-${idx}`} item={item} container={container} />
-          ))}
+          {placedItems.length > DETAILED_CARGO_LIMIT ? (
+            <InstancedCargoBoxes items={placedItems} container={container} />
+          ) : (
+            placedItems.map((item, idx) => (
+              <CargoBox key={`${item.id}-${idx}`} item={item} container={container} />
+            ))
+          )}
           {showWeightHeatmap && <CenterOfGravity items={placedItems} container={container} />}
         </group>
 
@@ -1605,7 +1655,90 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
           </div>
         </div>
       )}
+      {placedItems.length > DETAILED_CARGO_LIMIT && (
+        <div className="absolute top-4 right-4 pointer-events-none rounded-full bg-white/90 border border-white px-4 py-2 shadow-xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">
+            Vista optimizada: {placedItems.length.toLocaleString()} cajas
+          </span>
+        </div>
+      )}
     </div>
     </GlbErrorBoundary>
+  );
+};
+
+const groupCargoItems = (items: PlacedItem[]) => {
+  const groups = new Map<string, PlacedItem[]>();
+
+  items.forEach((item) => {
+    const key = `${item.color}|${item.width}|${item.height}|${item.length}`;
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  });
+
+  return Array.from(groups.entries()).map(([key, groupItems]) => {
+    const [color, width, height, length] = key.split('|');
+    return {
+      key,
+      color,
+      width: Number(width),
+      height: Number(height),
+      length: Number(length),
+      items: groupItems,
+    };
+  });
+};
+
+const InstancedCargoGroup: React.FC<{
+  group: ReturnType<typeof groupCargoItems>[number];
+  container: Container;
+}> = ({ group, container }) => {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const matrix = useMemo(() => new THREE.Matrix4(), []);
+  const position = useMemo(() => new THREE.Vector3(), []);
+  const rotation = useMemo(() => new THREE.Quaternion(), []);
+  const scale = useMemo(() => new THREE.Vector3(1, 1, 1), []);
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+
+    group.items.forEach((item, index) => {
+      position.set(
+        (item.position[0] - container.width / 2) / 100,
+        item.position[1] / 100,
+        (item.position[2] - container.length / 2) / 100
+      );
+      matrix.compose(position, rotation, scale);
+      mesh.setMatrixAt(index, matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [container, group.items, matrix, position, rotation, scale]);
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, group.items.length]} castShadow receiveShadow>
+      <boxGeometry args={[group.width / 100, group.height / 100, group.length / 100]} />
+      <meshStandardMaterial
+        color={group.color}
+        roughness={0.44}
+        metalness={0.04}
+        emissive={group.color}
+        emissiveIntensity={0.06}
+      />
+    </instancedMesh>
+  );
+};
+
+const InstancedCargoBoxes: React.FC<{ items: PlacedItem[]; container: Container }> = ({ items, container }) => {
+  const groups = useMemo(() => groupCargoItems(items), [items]);
+
+  return (
+    <>
+      {groups.map((group) => (
+        <InstancedCargoGroup key={group.key} group={group} container={container} />
+      ))}
+    </>
   );
 };
