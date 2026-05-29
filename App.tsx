@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { 
   Menu, HelpCircle, Settings, Plus, Package, Truck, FileText, Share2, 
   Trash2, RefreshCw, Weight, X, FileJson, User, Sparkles, 
@@ -8,15 +8,11 @@ import {
   Printer, ClipboardList, Info, ChevronRight, MessageSquare, Leaf, Wind, Zap,
   Globe, BarChart3, Navigation, AlertTriangle
 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
 import { Container, CargoItem, PlacedItem, CONTAINERS, Route } from './types';
 import { packItemsDetailed } from './utils/packer';
-import { Container3D } from './components/Container3D';
 import { ItemEditor } from './components/ItemEditor';
 import { InitialSetup } from './components/InitialSetup';
-import { RouteSelector } from './components/RouteSelector';
 import { PwaInstallButton } from './components/PwaInstallButton';
-import { getLoadOptimizationAdvice } from './services/geminiService';
 import { isSupabaseConfigured, supabase } from './services/supabaseClient';
 
 type ViewType = 'simulador' | 'cargas' | 'items' | 'espacio' | 'usuarios' | 'licencias';
@@ -36,6 +32,9 @@ const CURRENT_USER = {
 };
 const AUTH_PASSWORD = '3.1416';
 const APP_LOGO = `${import.meta.env.BASE_URL || './'}icons/eco-transport-logo.jpeg`;
+
+const Container3D = lazy(() => import('./components/Container3D').then((module) => ({ default: module.Container3D })));
+const RouteSelector = lazy(() => import('./components/RouteSelector').then((module) => ({ default: module.RouteSelector })));
 
 const DEFAULT_ITEMS: CargoItem[] = [
   { id: 'A', name: 'Item A', length: 120, width: 80, height: 100, weight: 25, quantity: 15, color: '#f87171', stackable: true, tiltable: false },
@@ -954,6 +953,7 @@ const App: React.FC = () => {
     setIsAiLoading(true);
     setShowAiPanel(true);
     try {
+      const { getLoadOptimizationAdvice } = await import('./services/geminiService');
       const advice = await getLoadOptimizationAdvice(selectedContainer, items, placedItems);
       setAiAdvice(advice);
     } catch (error) {
@@ -963,7 +963,8 @@ const App: React.FC = () => {
     }
   };
 
-  const exportToPdf = () => {
+  const exportToPdf = async () => {
+    const { jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 16;
@@ -1287,11 +1288,13 @@ const App: React.FC = () => {
       )}
       
       {showRouteSelector && (
-        <RouteSelector 
-          route={route} 
-          onUpdate={setRoute} 
-          onClose={() => setShowRouteSelector(false)} 
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-[120] bg-black/40" />}>
+          <RouteSelector 
+            route={route} 
+            onUpdate={setRoute} 
+            onClose={() => setShowRouteSelector(false)} 
+          />
+        </Suspense>
       )}
       
       {showShareModal && (
@@ -1452,13 +1455,24 @@ const App: React.FC = () => {
 
             <main className="flex-1 relative bg-[#bebebe]">
               <div className="absolute inset-0">
-                <Container3D 
-                  key={`${selectedContainer.id}-${placedItems.length}`}
-                  container={selectedContainer} 
-                  placedItems={placedItems} 
-                  showWeightHeatmap={showWeightHeatmap} 
-                  cameraView={cameraView}
-                />
+                <Suspense
+                  fallback={
+                    <div className="w-full h-full bg-[#aeb4b2] flex items-center justify-center">
+                      <div className="flex items-center gap-3 rounded-xl bg-white/80 px-5 py-3 text-xs font-black uppercase tracking-widest text-emerald-900 shadow-lg">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Cargando visor 3D
+                      </div>
+                    </div>
+                  }
+                >
+                  <Container3D 
+                    key={`${selectedContainer.id}-${placedItems.length}`}
+                    container={selectedContainer} 
+                    placedItems={placedItems} 
+                    showWeightHeatmap={showWeightHeatmap} 
+                    cameraView={cameraView}
+                  />
+                </Suspense>
               </div>
 
               <div className="absolute z-30 right-3 bottom-24 sm:right-6 sm:bottom-6 w-[min(360px,calc(100vw-24px))] bg-emerald-950/92 text-white rounded-2xl shadow-2xl border border-emerald-400/30 backdrop-blur-md overflow-hidden">
