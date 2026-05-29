@@ -538,10 +538,19 @@ const App: React.FC = () => {
   });
 
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
+  const [packingItems, setPackingItems] = useState<CargoItem[]>(items);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPackingItems(items);
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [items]);
 
   const packingResult = useMemo(
-    () => packItemsDetailed(selectedContainer, items),
-    [selectedContainer, items]
+    () => packItemsDetailed(selectedContainer, packingItems),
+    [selectedContainer, packingItems]
   );
 
   const overflowRecommendation = useMemo<OverflowRecommendation | null>(() => {
@@ -809,7 +818,8 @@ const App: React.FC = () => {
       if (error) console.warn('No se pudo guardar app_state en Supabase:', error.message);
     };
 
-    syncRemoteState();
+    const syncTimer = window.setTimeout(syncRemoteState, 900);
+    return () => window.clearTimeout(syncTimer);
   }, [items, cargasHistory, containerList, route, selectedContainer.id, showSetup, authUserId, isRemoteStateReady]);
 
   // Auto-rellenar dirección en el manifiesto basado en la ruta seleccionada
@@ -897,7 +907,9 @@ const App: React.FC = () => {
   }, [placedItems, selectedContainer, items, route, packingResult]);
 
   const handlePack = useCallback(() => {
-    setPlacedItems(packingResult.placedItems);
+    const currentPackingResult = packItemsDetailed(selectedContainer, items);
+    setPackingItems(items);
+    setPlacedItems(currentPackingResult.placedItems);
     const newRecord = {
       id: Date.now().toString(),
       nombre: `Plan sustentable ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
@@ -907,7 +919,7 @@ const App: React.FC = () => {
       usuario: CURRENT_USER.name,
     };
     setCargasHistory(prev => [newRecord, ...prev]);
-  }, [selectedContainer, packingResult.placedItems]);
+  }, [selectedContainer, items]);
 
   const handlePackAndReport = useCallback(() => {
     handlePack();
