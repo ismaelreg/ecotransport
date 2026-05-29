@@ -16,12 +16,13 @@ body {
   height: 100% !important;
   background: #bebebe !important;
   border-radius: 0 !important;
+  position: relative;
+  z-index: 1;
 }
 
 .canvas-container > div {
   width: 100% !important;
   height: 100% !important;
-  background: #bebebe !important;
   border-radius: 0 !important;
 }
 
@@ -29,6 +30,11 @@ body {
   background: #bebebe !important;
   border-radius: 0 !important;
   overflow: hidden;
+}
+
+.canvas-container__surface {
+  background: #bebebe !important;
+  border-radius: 0 !important;
 }
 
 input::-webkit-outer-spin-button,
