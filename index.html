@@ -10,9 +10,170 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" type="image/png" href="./icons/eco-transport-icon-192.png">
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+    <style>
+      html,
+      body,
+      #root {
+        min-height: 100%;
+      }
+
+      body {
+        background: #d6d6d6;
+      }
+
+      .eco-boot {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #d6d6d6;
+        color: #064e3b;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      .eco-boot__card {
+        width: min(360px, 92vw);
+        padding: 28px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
+        text-align: center;
+      }
+
+      .eco-boot__logo {
+        width: 82px;
+        height: 82px;
+        object-fit: cover;
+        border-radius: 22px;
+        border: 2px solid rgba(16, 185, 129, 0.35);
+        box-shadow: 0 10px 26px rgba(6, 78, 59, 0.2);
+      }
+
+      .eco-boot__title {
+        margin: 18px 0 6px;
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .eco-boot__text {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: #475569;
+      }
+
+      .eco-boot__bar {
+        height: 4px;
+        margin-top: 22px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #d1fae5;
+      }
+
+      .eco-boot__bar::before {
+        content: "";
+        display: block;
+        width: 42%;
+        height: 100%;
+        border-radius: inherit;
+        background: #10b981;
+        animation: ecoBoot 1.1s ease-in-out infinite alternate;
+      }
+
+      .eco-boot__slow {
+        display: none;
+        margin-top: 18px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #334155;
+      }
+
+      .eco-startup-slow .eco-boot__slow {
+        display: block;
+      }
+
+      .eco-boot__button {
+        margin-top: 14px;
+        width: 100%;
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        background: #047857;
+        color: white;
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+
+      @keyframes ecoBoot {
+        from {
+          transform: translateX(-80%);
+        }
+        to {
+          transform: translateX(220%);
+        }
+      }
+    </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <main class="eco-boot" aria-live="polite">
+            <section class="eco-boot__card">
+                <img class="eco-boot__logo" src="./icons/eco-transport-logo.jpeg" alt="EcoTransport logo">
+                <h1 class="eco-boot__title">EcoTransport</h1>
+                <p class="eco-boot__text">Cargando cubicaje sustentable...</p>
+                <div class="eco-boot__bar"></div>
+                <div class="eco-boot__slow">
+                    Si permanece aqui, hay cache viejo del navegador.
+                    <button class="eco-boot__button" type="button" onclick="window.ecoResetAndReload && window.ecoResetAndReload()">Restablecer carga</button>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script>
+      window.__ecoStartupTimer = window.setTimeout(function () {
+        document.documentElement.classList.add('eco-startup-slow');
+      }, 10000);
+
+      window.ecoResetAndReload = function () {
+        try {
+          localStorage.removeItem('cargo_items');
+          localStorage.removeItem('cargo_history');
+          localStorage.removeItem('cargo_spaces');
+          localStorage.removeItem('cargo_route');
+          localStorage.removeItem('cargo_setup_done');
+        } catch (error) {}
+
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations()
+            .then(function (registrations) {
+              return Promise.all(registrations.map(function (registration) { return registration.unregister(); }));
+            })
+            .then(function () {
+              if (window.caches) {
+                return caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+                });
+              }
+            })
+            .finally(function () {
+              window.location.replace(window.location.pathname + '?fresh=' + Date.now());
+            });
+          return;
+        }
+
+        window.location.replace(window.location.pathname + '?fresh=' + Date.now());
+      };
+
+      window.addEventListener('vite:preloadError', function () {
+        window.ecoResetAndReload();
+      });
+    </script>
 <script type="module" src="/index.tsx"></script>
 </body>
 </html>

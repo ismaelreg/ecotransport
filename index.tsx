@@ -4,6 +4,13 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
+declare global {
+  interface Window {
+    __ecoStartupTimer?: number;
+    ecoResetAndReload?: () => void;
+  }
+}
+
 class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
 
@@ -53,10 +60,13 @@ root.render(
   </AppErrorBoundary>
 );
 
+window.clearTimeout(window.__ecoStartupTimer);
+document.documentElement.classList.remove('eco-startup-slow');
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const baseUrl = import.meta.env.BASE_URL || './';
-    navigator.serviceWorker.register(`${baseUrl}sw.js`).catch((error) => {
+    navigator.serviceWorker.register(`${baseUrl}sw.js`, { updateViaCache: 'none' }).catch((error) => {
       console.warn('[ecotransport] No se pudo registrar el service worker', error);
     });
   });
