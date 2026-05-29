@@ -14,7 +14,7 @@ body {
   display: block;
   width: 100% !important;
   height: 100% !important;
-  background: #bebebe !important;
+  background: #aeb4b2 !important;
   border-radius: 0 !important;
   position: relative;
   z-index: 1;
@@ -27,13 +27,13 @@ body {
 }
 
 .canvas-container {
-  background: #bebebe !important;
+  background: #aeb4b2 !important;
   border-radius: 0 !important;
   overflow: hidden;
 }
 
 .canvas-container__surface {
-  background: #bebebe !important;
+  background: #aeb4b2 !important;
   border-radius: 0 !important;
 }
 

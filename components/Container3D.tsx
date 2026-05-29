@@ -13,6 +13,7 @@ const EV_TRUCK_GLB_URL = `${assetBaseUrl}models/ev-truck-original.glb`;
 const DRACO_DECODER_PATH = `${assetBaseUrl}draco/`;
 const USE_GLB_TRUCK = true;
 const DETAILED_CARGO_LIMIT = 320;
+const VIEWPORT_BG = '#aeb4b2';
 
 // Opción A: Modelo Proxy Ligero (Optimizado para web)
 
@@ -178,7 +179,7 @@ const SoftwareTruckFallback: React.FC<Container3DProps> = ({ container, placedIt
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, rect.width, rect.height);
-    ctx.fillStyle = '#bebebe';
+    ctx.fillStyle = VIEWPORT_BG;
     ctx.fillRect(0, 0, rect.width, rect.height);
 
     const camera = new THREE.PerspectiveCamera(34, rect.width / rect.height, 0.1, 10);
@@ -248,7 +249,7 @@ const SoftwareTruckFallback: React.FC<Container3DProps> = ({ container, placedIt
   };
 
   return (
-    <div ref={hostRef} className="w-full h-full bg-[#bebebe]">
+    <div ref={hostRef} className="w-full h-full" style={{ backgroundColor: VIEWPORT_BG }}>
       <canvas
         ref={canvasRef}
         className="block w-full h-full cursor-grab active:cursor-grabbing"
@@ -271,7 +272,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     setWebglFailed(false);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#bebebe');
+    scene.background = new THREE.Color(VIEWPORT_BG);
 
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
     camera.position.set(...(cameraView === 'front' ? [0, 5, 14] as [number, number, number] : [10, 8, 12] as [number, number, number]));
@@ -287,11 +288,11 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.localClippingEnabled = true;
-    renderer.setClearColor('#bebebe', 1);
+    renderer.setClearColor(VIEWPORT_BG, 1);
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     renderer.domElement.style.display = 'block';
-    renderer.domElement.style.background = '#bebebe';
+    renderer.domElement.style.background = VIEWPORT_BG;
     renderer.domElement.style.borderRadius = '0';
     const handleContextLost = (event: Event) => {
       event.preventDefault();
@@ -361,11 +362,11 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       groupCargoItems(placedItems).forEach((group) => {
         const geometry = new THREE.BoxGeometry(group.width / 100, group.height / 100, group.length / 100);
         const material = new THREE.MeshStandardMaterial({
-          color: group.color,
-          roughness: 0.44,
-          metalness: 0.04,
-          emissive: new THREE.Color(group.color),
-          emissiveIntensity: 0.06,
+          color: readableCargoColor(group.color),
+          roughness: 0.72,
+          metalness: 0,
+          emissive: readableCargoColor(group.color).multiplyScalar(0.18),
+          emissiveIntensity: 0.04,
         });
         const mesh = new THREE.InstancedMesh(geometry, material, group.items.length);
         group.items.forEach((item, index) => {
@@ -610,7 +611,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
   }
 
   return (
-    <div className="canvas-container relative w-full h-full bg-[#bebebe]">
+    <div className="canvas-container relative w-full h-full" style={{ backgroundColor: VIEWPORT_BG }}>
       <div ref={hostRef} className="w-full h-full" />
       {placedItems.length > DETAILED_CARGO_LIMIT && (
         <div className="absolute top-4 right-4 pointer-events-none rounded-full bg-white/90 border border-white px-4 py-2 shadow-xl">
@@ -621,6 +622,13 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
       )}
     </div>
   );
+};
+
+const readableCargoColor = (color: string) => {
+  const parsed = new THREE.Color(color || '#f59e0b');
+  const brightness = parsed.r * 0.299 + parsed.g * 0.587 + parsed.b * 0.114;
+  if (brightness > 0.72) parsed.multiplyScalar(0.58);
+  return parsed;
 };
 
 class GlbErrorBoundary extends React.Component<{ children: React.ReactNode; fallback?: React.ReactNode }, { hasError: boolean }> {
@@ -644,7 +652,7 @@ const LoadSpaceFallback: React.FC<Container3DProps> = ({ container, placedItems 
       : 0;
 
   return (
-    <div className="w-full h-full bg-[#bebebe] flex items-center justify-center p-6">
+    <div className="w-full h-full flex items-center justify-center p-6" style={{ backgroundColor: VIEWPORT_BG }}>
       <div className="w-[min(520px,90vw)] bg-white/90 border border-white rounded-2xl shadow-2xl p-6 text-center">
         <div className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Vista de respaldo</div>
         <div className="mt-2 text-xl font-black text-gray-900">{container.name}</div>
@@ -1551,8 +1559,8 @@ const ContainerModel: React.FC<{ container: Container }> = ({ container }) => {
       {/* Guía visual del espacio de carga siempre presente para referencia */}
       <mesh position={[0, h / 2, 0]}>
         <boxGeometry args={[w, h, l]} />
-        <meshStandardMaterial color="#10b981" transparent opacity={0.08} side={THREE.DoubleSide} />
-        <Edges color="#059669" />
+        <meshStandardMaterial color="#10b981" transparent opacity={0.12} side={THREE.DoubleSide} />
+        <Edges color="#007f5f" threshold={1} />
       </mesh>
     </group>
   );
@@ -1610,15 +1618,15 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
 
   return (
     <GlbErrorBoundary fallback={<LoadSpaceFallback container={container} placedItems={placedItems} showWeightHeatmap={showWeightHeatmap} cameraView={cameraView} />}>
-    <div className="canvas-container relative w-full h-full bg-[#bebebe]">
+    <div className="canvas-container relative w-full h-full" style={{ backgroundColor: VIEWPORT_BG }}>
       <Canvas
         className="canvas-container__surface relative z-0"
         dpr={[1, 1]}
         gl={{ antialias: false, alpha: false, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false }}
-        style={{ display: 'block', background: '#bebebe', borderRadius: 0 }}
+        style={{ display: 'block', background: VIEWPORT_BG, borderRadius: 0 }}
         onCreated={({ gl, scene }) => {
-          gl.setClearColor('#bebebe', 1);
-          scene.background = new THREE.Color('#bebebe');
+          gl.setClearColor(VIEWPORT_BG, 1);
+          scene.background = new THREE.Color(VIEWPORT_BG);
         }}
       >
         <CanvasAutoSizer />
@@ -1629,9 +1637,9 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
           minDistance={2}
           maxDistance={50}
         />
-        <ambientLight intensity={0.7} />
-        <spotLight position={[10, 15, 10]} angle={0.25} penumbra={1} castShadow intensity={2} />
-        <directionalLight position={[-10, 10, -5]} intensity={0.5} />
+        <ambientLight intensity={0.55} />
+        <spotLight position={[10, 15, 10]} angle={0.25} penumbra={1} castShadow intensity={1.35} />
+        <directionalLight position={[-10, 10, -5]} intensity={0.35} />
         
         <group>
           <ContainerModel container={container} />
@@ -1728,11 +1736,11 @@ const InstancedCargoGroup: React.FC<{
     <instancedMesh ref={meshRef} args={[undefined, undefined, group.items.length]} castShadow receiveShadow>
       <boxGeometry args={[group.width / 100, group.height / 100, group.length / 100]} />
       <meshStandardMaterial
-        color={group.color}
-        roughness={0.44}
-        metalness={0.04}
-        emissive={group.color}
-        emissiveIntensity={0.06}
+        color={readableCargoColor(group.color)}
+        roughness={0.72}
+        metalness={0}
+        emissive={readableCargoColor(group.color).multiplyScalar(0.18)}
+        emissiveIntensity={0.04}
       />
     </instancedMesh>
   );
