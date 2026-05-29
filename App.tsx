@@ -42,6 +42,40 @@ const DEFAULT_ITEMS: CargoItem[] = [
   { id: 'B', name: 'Item B', length: 60, width: 40, height: 40, weight: 12, quantity: 40, color: '#fbbf24', stackable: true, tiltable: true }
 ];
 
+const DEFAULT_ROUTE: Route = { origin: null, destination: null, distanceKm: 0 };
+
+const readStoredValue = <T,>(key: string, fallback: T, validate?: (value: unknown) => value is T): T => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (validate && !validate(parsed)) {
+      localStorage.removeItem(key);
+      return fallback;
+    }
+
+    return parsed as T;
+  } catch (error) {
+    console.warn(`[ecotransport] Estado local invalido en ${key}; se restablece.`, error);
+    localStorage.removeItem(key);
+    return fallback;
+  }
+};
+
+const writeStoredValue = (key: string, value: unknown) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn(`[ecotransport] No se pudo guardar ${key} en localStorage.`, error);
+  }
+};
+
+const isContainerArray = (value: unknown): value is Container[] => Array.isArray(value);
+const isCargoItemArray = (value: unknown): value is CargoItem[] => Array.isArray(value);
+const isHistoryArray = (value: unknown): value is any[] => Array.isArray(value);
+const isRoute = (value: unknown): value is Route => Boolean(value && typeof value === 'object' && 'distanceKm' in value);
+
 type RemoteAppState = {
   items: CargoItem[];
   container_list: Container[];
@@ -498,10 +532,7 @@ const App: React.FC = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   
-  const [route, setRoute] = useState<Route>(() => {
-    const saved = localStorage.getItem('cargo_route');
-    return saved ? JSON.parse(saved) : { origin: null, destination: null, distanceKm: 0 };
-  });
+  const [route, setRoute] = useState<Route>(() => readStoredValue('cargo_route', DEFAULT_ROUTE, isRoute));
 
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
@@ -512,10 +543,9 @@ const App: React.FC = () => {
   const [sortBy, setSortBy] = useState<'name' | 'weight' | 'volume'>('name');
 
   const [containerList, setContainerList] = useState<Container[]>(() => {
-    const saved = localStorage.getItem('cargo_spaces');
-    if (!saved) return CONTAINERS;
+    const savedContainers = readStoredValue('cargo_spaces', CONTAINERS, isContainerArray);
+    if (!savedContainers.length) return CONTAINERS;
 
-    const savedContainers = JSON.parse(saved) as Container[];
     const savedById = new Map(savedContainers.map((container) => [container.id, container]));
     const defaultIds = new Set(CONTAINERS.map((container) => container.id));
     const customContainers = savedContainers.filter((container) => !defaultIds.has(container.id));
@@ -527,15 +557,9 @@ const App: React.FC = () => {
   );
   const [filterType, setFilterType] = useState<Container['type'] | 'all'>('all');
 
-  const [items, setItems] = useState<CargoItem[]>(() => {
-    const saved = localStorage.getItem('cargo_items');
-    return saved ? JSON.parse(saved) : DEFAULT_ITEMS;
-  });
+  const [items, setItems] = useState<CargoItem[]>(() => readStoredValue('cargo_items', DEFAULT_ITEMS, isCargoItemArray));
 
-  const [cargasHistory, setCargasHistory] = useState<any[]>(() => {
-    const saved = localStorage.getItem('cargo_history');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [cargasHistory, setCargasHistory] = useState<any[]>(() => readStoredValue('cargo_history', [], isHistoryArray));
 
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
   const [packingItems, setPackingItems] = useState<CargoItem[]>(items);
@@ -771,11 +795,11 @@ const App: React.FC = () => {
 
       if (data) {
         const remote = data as RemoteAppState;
-        const nextContainers = remote.container_list?.length ? remote.container_list : containerList;
-        setItems(remote.items?.length ? remote.items : DEFAULT_ITEMS);
+        const nextContainers = Array.isArray(remote.container_list) && remote.container_list.length ? remote.container_list : containerList;
+        setItems(Array.isArray(remote.items) && remote.items.length ? remote.items : DEFAULT_ITEMS);
         setContainerList(nextContainers);
-        setCargasHistory(remote.cargas_history || []);
-        setRoute(remote.route || { origin: null, destination: null, distanceKm: 0 });
+        setCargasHistory(Array.isArray(remote.cargas_history) ? remote.cargas_history : []);
+        setRoute(isRoute(remote.route) ? remote.route : DEFAULT_ROUTE);
         setShowSetup(!remote.setup_done);
 
         const selected = nextContainers.find((container) => container.id === remote.selected_container_id);
@@ -796,10 +820,10 @@ const App: React.FC = () => {
   }, [authUserId]);
 
   useEffect(() => {
-    localStorage.setItem('cargo_items', JSON.stringify(items));
-    localStorage.setItem('cargo_history', JSON.stringify(cargasHistory));
-    localStorage.setItem('cargo_spaces', JSON.stringify(containerList));
-    localStorage.setItem('cargo_route', JSON.stringify(route));
+    writeStoredValue('cargo_items', items);
+    writeStoredValue('cargo_history', cargasHistory);
+    writeStoredValue('cargo_spaces', containerList);
+    writeStoredValue('cargo_route', route);
 
     if (!isSupabaseConfigured || !authUserId || !isRemoteStateReady) return;
 
