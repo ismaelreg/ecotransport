@@ -287,9 +287,12 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.localClippingEnabled = true;
+    renderer.setClearColor('#bebebe', 1);
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     renderer.domElement.style.display = 'block';
+    renderer.domElement.style.background = '#bebebe';
+    renderer.domElement.style.borderRadius = '0';
     const handleContextLost = (event: Event) => {
       event.preventDefault();
       setWebglFailed(true);
@@ -607,7 +610,7 @@ const DirectTruckViewer: React.FC<Container3DProps> = ({ container, placedItems,
   }
 
   return (
-    <div className="relative w-full h-full bg-[#bebebe]">
+    <div className="canvas-container relative w-full h-full bg-[#bebebe]">
       <div ref={hostRef} className="w-full h-full" />
       {placedItems.length > DETAILED_CARGO_LIMIT && (
         <div className="absolute top-4 right-4 pointer-events-none rounded-full bg-white/90 border border-white px-4 py-2 shadow-xl">
@@ -1611,8 +1614,12 @@ export const Container3D: React.FC<Container3DProps> = ({ container, placedItems
       <Canvas
         className="canvas-container__surface relative z-0"
         dpr={[1, 1]}
-        gl={{ antialias: false, alpha: true, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false }}
-        style={{ display: 'block' }}
+        gl={{ antialias: false, alpha: false, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false }}
+        style={{ display: 'block', background: '#bebebe', borderRadius: 0 }}
+        onCreated={({ gl, scene }) => {
+          gl.setClearColor('#bebebe', 1);
+          scene.background = new THREE.Color('#bebebe');
+        }}
       >
         <CanvasAutoSizer />
         <PerspectiveCamera makeDefault position={cameraPosition} fov={40} />

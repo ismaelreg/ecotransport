@@ -14,11 +14,21 @@ body {
   display: block;
   width: 100% !important;
   height: 100% !important;
+  background: #bebebe !important;
+  border-radius: 0 !important;
 }
 
 .canvas-container > div {
   width: 100% !important;
   height: 100% !important;
+  background: #bebebe !important;
+  border-radius: 0 !important;
+}
+
+.canvas-container {
+  background: #bebebe !important;
+  border-radius: 0 !important;
+  overflow: hidden;
 }
 
 input::-webkit-outer-spin-button,
