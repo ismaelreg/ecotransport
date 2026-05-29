@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reiniciando EcoTransport</title>
+  <style>
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #d6d6d6;
+      color: #064e3b;
+    }
+
+    main {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    section {
+      width: min(380px, 92vw);
+      padding: 30px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
+      text-align: center;
+    }
+
+    img {
+      width: 82px;
+      height: 82px;
+      object-fit: cover;
+      border-radius: 22px;
+      border: 2px solid rgba(16, 185, 129, 0.35);
+    }
+
+    h1 {
+      margin: 18px 0 8px;
+      font-size: 23px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    p {
+      margin: 0;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 18px;
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 16px;
+      background: #047857;
+      color: white;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <img src="./icons/eco-transport-logo.jpeg" alt="EcoTransport logo">
+      <h1>EcoTransport</h1>
+      <p id="status">Limpiando cache local y preparando una carga nueva...</p>
+      <button type="button" onclick="resetEcoTransport()">Reintentar ahora</button>
+    </section>
+  </main>
+
+  <script>
+    async function resetEcoTransport() {
+      var status = document.getElementById('status');
+      try {
+        status.textContent = 'Eliminando datos locales...';
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (error) {}
+
+      try {
+        if ('serviceWorker' in navigator) {
+          status.textContent = 'Eliminando service workers...';
+          var registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(function (registration) {
+            return registration.unregister();
+          }));
+        }
+      } catch (error) {}
+
+      try {
+        if ('caches' in window) {
+          status.textContent = 'Eliminando cache del navegador...';
+          var keys = await caches.keys();
+          await Promise.all(keys.map(function (key) {
+            return caches.delete(key);
+          }));
+        }
+      } catch (error) {}
+
+      status.textContent = 'Abriendo EcoTransport...';
+      window.location.replace('./?fresh=' + Date.now());
+    }
+
+    resetEcoTransport();
+  </script>
+</body>
+</html>
